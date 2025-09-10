@@ -1,0 +1,145 @@
+
+## **1️⃣ Виды функций в JavaScript**
+
+### **1. Обычная функция (Function Declaration)**
+
+```javascript
+function greet(name) {
+return `Привет, ${name}!`;
+}
+console.log(greet('Саша')); // Привет, Саша!
+```
+
+* Можно вызывать до объявления (hoisting).
+* Имеет собственный `this` (контекст вызова).
+
+---
+
+### **2. Функция-выражение (Function Expression)**
+
+```javascript
+const greet = function(name) {
+return `Привет, ${name}!`;
+};
+console.log(greet('Саша'));
+```
+
+* Не поднимается (не работает до объявления).
+* Может быть анонимной или иметь имя.
+
+---
+
+### **3. Стрелочная функция (Arrow Function)**
+
+```javascript
+const greet = name => `Привет, ${name}!`;
+console.log(greet('Саша'));
+```
+
+* Лаконичная запись.
+* **Не имеет собственного `this`** — берет `this` из внешней области.
+* Не может использоваться как конструктор (`new` нельзя).
+
+---
+
+### **4. Анонимные функции**
+
+```javascript
+setTimeout(function() {
+console.log('Прошло 1 секунда');
+}, 1000);
+```
+
+* Используются как аргументы других функций.
+* Можно заменить стрелочной:
+
+```javascript
+setTimeout(() => console.log('Прошло 1 секунда'), 1000);
+```
+
+---
+
+### **5. Функции с параметрами по умолчанию**
+
+```javascript
+function greet(name = 'Гость') {
+return `Привет, ${name}!`;
+}
+console.log(greet()); // Привет, Гость!
+```
+
+---
+
+### **6. Rest-параметры и spread**
+
+```javascript
+function sum(...nums) { // собирает в массив
+return nums.reduce((a, b) => a + b, 0);
+}
+console.log(sum(1,2,3,4)); // 10
+```
+
+---
+
+## **2️⃣ Замыкания (Closures)**
+
+**Что это:** функция вместе с «закрытой» областью видимости, где она была создана.
+
+Пример:
+
+```javascript
+function makeCounter() {
+let count = 0; // переменная закрыта
+return function() {
+count++;
+return count;
+};
+}
+
+const counter = makeCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+console.log(counter()); // 3
+```
+
+* `count` не доступна извне напрямую — **замыкание сохраняет её состояние**.
+* Полезно для приватных данных и инкапсуляции.
+
+---
+
+### **Практические примеры замыканий**
+
+1. **Счётчик кликов**
+
+```javascript
+function clickCounter() {
+let clicks = 0;
+return function() {
+clicks++;
+console.log(`Кликов: ${clicks}`);
+};
+}
+
+const buttonClick = clickCounter();
+buttonClick(); // Кликов: 1
+buttonClick(); // Кликов: 2
+```
+
+2. **Фабрика функций**
+
+```javascript
+function multiplier(factor) {
+return x => x * factor;
+}
+
+const double = multiplier(2);
+console.log(double(5)); // 10
+```
+
+---
+
+### **3️⃣ Основные правила**
+
+* Стрелочные функции не имеют собственного `this`.
+* Function Declaration поднимаются (hoisting).
+* Замыкание — это всегда ссылка на **область видимости при создании функции**, а не при её вызове.

@@ -1,0 +1,375 @@
+
+
+/*
+Мобильные телефоны (смартфоны) – до 480px (часто 320–480px).
+Малые планшеты / большие телефоны – 481–768px.
+Планшеты / маленькие ноутбуки – 769–1024px.
+Средние ноутбуки / десктопы – 1025–1280px.
+Большие десктопы / широкие экраны – 1281–1600px и выше.
+*/
+
+
+@media (min-width: 1400px) {
+  .logo img{
+    height: 111px;
+  }
+  .main-nav img{
+    height: 77px;
+  }
+}
+
+@media (min-width: 1300px) {
+  .articles-container {
+    column-count: 4;
+  }
+  .logo img{
+    height: 100px;
+  }
+  .main-nav img{
+    height: 70px;
+  }
+  #six{
+    height: 77px;
+  }
+  #forSearch {
+    height: 2.2em;
+    right: 90px;
+  }
+  .flags{
+    top: 70px;
+  }
+}
+
+@media (max-width: 1100px){
+  #six {
+    width: 50px;
+    top: 29px;
+  }
+  .flags{
+    top: 45px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .flags{
+    top: 45px;
+    width: 25px;
+  }
+  .articles-container {
+    column-count: 3;
+  }
+  .logo img{
+    height: 60px;
+  }
+  .main-nav img{
+    height: 40px;
+  }
+  .article-card h3{
+    font-size: 1.2em;
+  }
+  .article-card p {
+    font-size: 1em;
+  }
+  .article-card .post-time {
+    font-size: 0.8em;
+  }
+  #chat{
+    height: 50px;
+  }
+  #main{
+    margin: 40px 22px;
+  }
+  .articles-container{
+    gap: 15px;
+  }
+  #post{
+    padding: 0 33px;
+  }
+  html{
+    font-size: 19px;
+  }
+  .postH1{
+    line-height: 1.1;
+  }
+  #six{
+    width: 45px;
+    top: 22px;
+  }
+  #post h2 {
+    text-align: left;
+    margin-bottom: -0.5em;
+    line-height: 1.1;
+  }
+  #forSearch {
+    height: 1.8em;
+    right: 65px;
+  }
+}
+
+
+
+
+
+
+@media (max-width: 800px) {
+  .articles-container {
+    column-count: 2;
+  }
+  .postH1{
+    line-height: 1.1;
+    font-size: 1.7em;
+    text-shadow: none;
+  }
+  #post{
+    padding: 0;
+    line-height: 1.1;
+  }
+  html{
+    font-size: 17px;
+  }
+  .logo img{
+    height: 50px;
+  }
+  .main-nav img{
+    height: 33px;
+  }
+  .logo{
+
+  }
+  .comment-form {
+    width: 80%;
+    margin: 20px 0;
+  }
+  #chatPanel{
+    right: 10px;
+    padding-bottom: 0;
+  }
+  #six{
+    width: 33px;
+    top: 20px;
+    height: auto;
+  }
+  .flags{
+    top: 33px;
+    width: 23px;
+  }
+  .site-header {
+    padding: 7px 20px;
+    padding-top: 11px;
+  }
+  #forSearch {
+    height: 1.5em;
+    right: 50px;
+  }
+  .modal-content{
+    transform: scale(0.8);
+    padding: 3px 20px;
+  }
+  #formTitle{
+    margin: 0;
+    padding: 0;
+    margin-top: 9px;
+  }
+
+}
+
+
+
+@media (max-width: 700px){
+  .main-nav img{
+    height: 30px;
+    left: -22px;
+    top: 5px;
+  }
+  .logo img {
+    height: 57px;
+  }
+  .main-nav{
+    padding-left: 10px;
+  }
+  .logo{
+    margin-left: 11px;
+  }
+  .flags {
+    top: 32px;
+    width: 20px;
+  }
+  #search{
+    height: 108%;
+  }
+
+  #six{
+    right: 6px;
+  }
+  #forSearch {
+    right: 45px;
+  }
+  .modal-content{
+    transform: scale(0.7);
+  }
+  .form-footer a{
+    transform: scale(1.2);
+  }
+}
+
+
+
+@media (max-width: 600px){
+  .main-nav img{
+    height: 27px;
+    left: -22px;
+    top: 5px;
+  }
+  .logo img {
+    height: 45px;
+  }
+  .main-nav{
+    padding-left: 10px;
+  }
+  .logo{
+    margin-left: 11px;
+  }
+  .flags {
+    top: 26px;
+    width: 20px;
+  }
+  #six {
+    width: 33px;
+    top: 17px;
+    height: auto;
+  }
+  #forSearch {
+    right: 42px;
+  }
+  #enter{
+    bottom: -1px;
+    right: 108%;
+  }
+  .modal-content{
+    transform: scale(0.6);
+  }
+  .form-group input{
+    margin: 3px 0;
+  }
+}
+
+
+
+@media (max-width: 500px) {
+  .articles-container {
+    column-count: 1;
+  }
+  html{
+    font-size: 15px;
+  }
+  #comments-wrap {
+    margin-left: 0px;
+  }
+  .comment-form {
+    width: 100%;
+    margin: 20px 0;
+  }
+  .comment-form input {
+    width: 50%;
+  }
+  table{
+    margin: 0;
+    max-width: 100%;
+  }
+  tr, td{
+    padding: 15px 5px;
+  }
+  .main-nav{
+    padding-left: 0;
+    margin-left: 12px;
+  }
+  #inside a{
+    font-size: 1.2em;
+  }
+  #userName{
+    top: 1px;
+  }
+  .logo{
+    display: none;
+  }
+  .flags{
+    top: 20px;
+  }
+  #six{
+    top: 7px;
+  }
+  .main-nav img {
+    height: 28px;
+    left: 0;
+    top: 2px;
+  }
+  #forSearch {
+    height: 1.8em;
+  }
+  .form-group input{
+    margin: 5px 0;
+  }
+}
+
+@media (max-width: 400px) {
+  .articles-container {
+    column-count: 1;
+  }
+  html{
+    font-size: 15px;
+  }
+  #comments-wrap {
+    margin-left: 0px;
+  }
+  .comment-form {
+    width: 100%;
+    margin: 20px 0;
+  }
+  .comment-form input {
+    width: 50%;
+  }
+  table{
+    margin: 0;
+    max-width: 100%;
+  }
+  tr, td{
+    padding: 15px 5px;
+  }
+  .main-nav{
+    padding-left: 0;
+    margin-left: 12px;
+  }
+  #inside a{
+    font-size: 1.2em;
+  }
+  #userName{
+    top: 1px;
+  }
+  .logo{
+    display: none;
+  }
+  .flags{
+    top: 22px;
+  }
+  #six{
+    top: 10px;
+  }
+  .main-nav img {
+    height: 25px;
+    left: 0;
+    top: 4px;
+  }
+  #forSearch {
+    height: 1.5em;
+  }
+  #enter{
+    bottom: -1px;
+    right: 108%;
+  }
+  .site-header{
+    padding: 13px 20px;
+  }
+  .modal-content{
+    transform: scale(0.9);
+  }
+}

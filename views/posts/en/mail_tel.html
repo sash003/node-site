@@ -1,0 +1,79 @@
+
+Node.js is often used not only for web applications but also for background tasks: for example, sending notifications to users. The most popular options are sending emails and messages via Telegram. Let's go through both methods in practice.
+<h2>Sending Emails via Nodemailer</h2>
+For e-mail in Node.js, the package <b>nodemailer</b> is most commonly used.
+It works through an SMTP server (for example, Gmail, Mailgun, SendGrid, etc.).
+<pre><code class="language-bash">
+npm install nodemailer
+</code></pre>
+Example of a simple script:
+<pre><code class="language-javascript">
+// mail.js
+const nodemailer = require('nodemailer');
+
+// create transporter (SMTP connection)
+let transporter = nodemailer.createTransport({
+  service: 'gmail', // or smtp.yandex.ru, smtp.mail.ru
+  auth: {
+    user: 'yourmail@gmail.com',
+    pass: 'app-password' // use app password
+  }
+});
+
+// sending email
+async function sendMail() {
+  let info = await transporter.sendMail({
+    from: '"My App" <yourmail@gmail.com>',
+    to: 'user@example.com',
+    subject: 'Hello!',
+    text: 'This is a test email from Node.js',
+    html: '<b>This is a test email from Node.js</b>'
+  });
+
+  console.log('Email sent: %s', info.messageId);
+}
+
+sendMail().catch(console.error);
+</code></pre>
+⚡ Important: if using Gmail, enable <i>app passwords</i> and two-factor authentication, otherwise the email will not go through.
+<h2>Sending Notifications via Telegram</h2>
+For Telegram notifications, you need to create a <b>bot</b> in <a href="https://t.me/BotFather" target="_blank">BotFather</a>.
+It will give you a token. Then get your <code>chat_id</code> by sending any message to the bot and checking https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
+<pre><code class="language-bash">
+npm install node-fetch
+</code></pre>
+Example code:
+<pre><code class="language-javascript">
+// telegram.js
+const fetch = require('node-fetch');
+
+const TOKEN = 'YOUR_BOT_TOKEN';
+const CHAT_ID = '123456789';
+
+async function sendTelegram(text) {
+  const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+  const params = {
+    chat_id: CHAT_ID,
+    text: text,
+    parse_mode: 'HTML'
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+
+  const data = await res.json();
+  console.log('Telegram response:', data);
+}
+
+sendTelegram('Node.js reports: server started!');
+</code></pre>
+<h2>Combining Both Methods</h2>
+You can move the functions <code>sendMail()</code> and <code>sendTelegram()</code> into a separate module and call them at any time: on user registration, on server errors, or when a new order arrives.
+<h2>Conclusion</h2>
+<ul><li><b>Nodemailer</b> — the standard for sending emails via SMTP.</li>
+  <li><b>Telegram Bot API</b> — a fast way to send notifications directly to Telegram.</li>
+  <li>Both methods can be easily integrated into any Node.js project.</li></ul>
+This way your users and admins will always stay informed 🚀

@@ -1,0 +1,252 @@
+
+Node.js provides a powerful fs module for working with files and directories. It allows both synchronous and asynchronous reading and writing of data, managing directories, watching file changes, and building full server-side applications. In this article, we will cover the main features of fs, nuances of asynchrony, and provide practical examples.
+<h2>1. fs Module: Synchronous and Asynchronous Methods</h2>
+In Node.js, most file operations come in two types:
+Asynchronous — do not block the main execution thread, work via callbacks or promises.
+Synchronous — block code execution until the operation completes.
+
+Example of importing:
+<pre><code class="language-javascript">
+const fs = require('fs');
+const path = require('path');
+</code></pre>
+Synchronous file reading
+<pre><code class="language-javascript">
+const data = fs.readFileSync(path.join(__dirname, 'example.txt'), 'utf-8');
+console.log(data);
+</code></pre>
+⚠️ Downside of synchronous methods: while the file is being read, Node.js does not handle other requests. Therefore, asynchronous methods are usually used on the server.
+
+Asynchronous file reading (callback)
+<pre><code class="language-javascript">
+fs.readFile(path.join(__dirname, 'example.txt'), 'utf-8', (err, data) => {
+  if (err) {
+    console.error('File read error:', err);
+    return;
+  }
+  console.log(data);
+});
+</code></pre>
+Asynchronous reading via promises
+<pre><code class="language-javascript">
+const fsPromises = fs.promises;
+async function readFileAsync() {
+  try {
+    const data = await fsPromises.readFile(path.join(__dirname, 'example.txt'), 'utf-8');
+    console.log(data);
+  } catch (err) {
+    console.error('Error:', err);
+  }
+}
+
+readFileAsync();
+</code></pre>
+<h2>2. Writing Files</h2>
+Node.js allows writing data to a file both synchronously and asynchronously.
+
+Asynchronous write with callback
+<pre><code class="language-javascript">
+fs.writeFile('output.txt', 'Hello, Node.js!', 'utf-8', (err) => {
+  if (err) {
+    console.error('Write error:', err);
+  } else {
+    console.log('File written successfully!');
+  }
+});
+</code></pre>
+Asynchronous write via promises
+<pre><code class="language-javascript">
+async function writeFileAsync() {
+  try {
+    await fsPromises.writeFile('output.txt', 'Asynchronous write via promises', 'utf-8');
+    console.log('File written!');
+  } catch (err) {
+    console.error('Error:', err);
+  }
+}
+
+writeFileAsync();
+</code></pre>
+<h2>3. Checking if Files and Directories Exist</h2>
+Often you need to make sure a file or directory exists before reading or writing.
+<pre><code class="language-javascript">
+const filePath = path.join(__dirname, 'example.txt');
+fs.access(filePath, fs.constants.F_OK, (err) => {
+  if (err) {
+    console.log('File does not exist');
+  } else {
+   console.log('File exists');
+  }
+});
+</code></pre>
+<h2>4. Working with Directories</h2>
+Creating, reading, and deleting folders is also supported through fs.
+
+Creating a folder
+<pre><code class="language-javascript">
+fs.mkdir(path.join(__dirname, 'uploads'), { recursive: true }, (err) => {
+  if (err) console.error(err);
+  else console.log('Folder created!');
+});
+</code></pre>
+recursive: true allows creating nested directories even if parent directories do not exist.
+
+Reading directory contents
+<pre><code class="language-javascript">
+fs.readdir(__dirname, (err, files) => {
+if (err) console.error(err);
+else console.log('Files in folder:', files);
+});
+</code></pre>
+Deleting a folder
+<pre><code class="language-javascript">
+fs.rmdir(path.join(__dirname, 'uploads'), { recursive: true }, (err) => {
+  if (err) console.error(err);
+  else console.log('Folder deleted!');
+});
+</code></pre>
+<h2>5. Asynchrony and Events</h2>
+Asynchronous methods allow you not to block the Event Loop. For example, a Node.js server can handle HTTP requests while reading a file.
+For large files, you can use streams:
+<pre><code class="language-javascript">
+const readStream = fs.createReadStream('bigfile.txt', 'utf-8');
+
+readStream.on('data', chunk => {
+  console.log('Read:', chunk.length, 'characters');
+});
+
+readStream.on('end', () => {
+  console.log('Reading finished');
+});
+</code></pre>
+Using streams, you avoid loading the entire file into memory.
+<h2>6. Practical Example: Logging Requests</h2>
+<pre><code class="language-javascript">
+const http = require('http');
+
+http.createServer(async (req, res) => {
+  const logLine = `${new Date().toISOString()} ${req.method} ${req.url}\n`;
+
+  await fsPromises.appendFile('server.log', logLine);
+
+  res.end('OK');
+}).listen(3000, () => console.log('Server on port 3000'));
+</code></pre>
+Here appendFile asynchronously adds lines to the log without blocking the server.
+<h2>7. Tips for Working with fs</h2>
+Use asynchronous methods if it is a server application. Synchronous methods only for scripts or CLI.
+Always check for errors, especially when reading/writing files.
+Use streams for large files — saves memory.
+Try to keep paths via path.join to make code cross-platform.
+Node.js and the fs module give full control over the server's file system. Knowing how to use asynchrony, streams, and promises allows you to build reliable applications with logging, file uploads, content generation, and folder management without risking server blocking.
+<h2>8. File Upload: multer + file-type</h2>
+In web applications, you often need to accept files from users — images, documents, or videos. For this, Node.js has the popular middleware multer.
+
+Installation:
+<pre><code class="language-javascript">
+npm install multer file-type
+</code></pre>
+Storage setup
+<pre><code class="language-javascript">
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const FileType = require('file-type');
+
+// Set up storage for uploaded files using multer
+const storage = multer.diskStorage({
+   /* Where to save the file
+   Function called for each file
+   req  – request data
+   file – file object (name, type, etc.)
+   cb   – callback, tells multer where to put the file */
+  destination: (req, file, cb) => {
+    // Path to uploads folder inside public
+    const uploadDir = path.join(__dirname, 'public', 'uploads');
+
+    // If the folder doesn't exist — create it (recursive: true will create all nested folders if needed)
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    // Tell multer exactly where to save the file
+    cb(null, uploadDir);
+  },
+
+  // How to name the file upon saving
+  filename: (req, file, cb) => {
+    // Make a unique name: timestamp + original file name
+    // Example: 1692718200000-photo.png
+    const uniqueName = Date.now() + '-' + file.originalname;
+
+    // Tell multer the new name
+    cb(null, uniqueName);
+  }
+});
+
+// Assemble the middleware for uploading
+const upload = multer({
+  storage, // use the storage configured above
+  limits: {
+    fileSize: 10 * 1024 * 1024 // limit: 10 MB per file
+  }
+}).any(); // .any() means accept files with any input names. If you want stricter (e.g., max 3 files), you can use .array('files', 3) — multer will trim to three automatically.
+</code></pre>
+File type check
+
+Even if a user renames a file (e.g., virus.jpg.exe), we can check the real MIME type via file-type:
+<pre><code class="language-javascript">
+async function checkFileType(filePath) {
+  const buffer = await fs.promises.readFile(filePath);
+  const type = await FileType.fromBuffer(buffer);
+  return type ? type.mime : null;
+}
+</code></pre>
+File upload handler
+<pre><code class="language-javascript">
+const express = require('express');
+const app = express();
+
+const ALLOWED_MIME = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'video/mp4',
+  'audio/mpeg',
+  'application/pdf'
+];
+
+app.post('/upload', (req, res) => {
+  upload(req, res, async (err) => {
+    if (err) {
+      return res.status(400).json({ success: false, message: 'Upload error: ' + err.message });
+    }
+
+    const files = req.files || [];
+
+    for (const f of files) {
+      const filePath = path.join(f.destination, f.filename);
+      const mime = await checkFileType(filePath);
+
+      if (!mime || !ALLOWED_MIME.includes(mime)) {
+        fs.unlinkSync(filePath); // remove unsuitable file
+        return res.json({ success: false, message: 'Invalid file format' });
+      }
+    }
+
+    res.json({ success: true, message: 'Files uploaded successfully!' });
+  });
+});
+
+app.listen(3000, () => console.log('Server running on http://localhost:3000'));
+</code></pre>
+What we achieved
+
+Upload files to public/uploads folder.
+Limited size to 10 MB.
+Check the real MIME type via file-type, not just extension.
+If the format is not allowed, the file is deleted.
+
+💡 In real projects, additional limits on file count, automatic cleanup of temporary directories, and saving file info in the database are added.
+
+Thus, fs + multer + file-type allow safe and convenient file uploads in Node.js without risking vulnerabilities.

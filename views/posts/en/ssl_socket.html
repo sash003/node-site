@@ -1,0 +1,371 @@
+In this article, we will take a detailed look at how to properly set up a server on <b>Socket.IO</b> using <b>SSL encryption</b> for secure data exchange. We will configure the environment so that connections between clients and the server are protected by modern protocols. As certificates, we will take a free and reliable solution - <b>Let’s Encrypt</b>, which is suitable for most projects. Additionally, we will analyze the scheme of work through <b>nginx proxy</b> to ensure correct routing and stability of the application, as well as connection via a secure <b>HTTPS/WSS</b> protocol.
+
+This approach allows you to not only protect user data, but also increase trust in your site or application.
+<h2>1. Installing and configuring SSL using Certbot</h2>
+We will use the free SSL Let's Encrypt. For this, the <code>certbot</code> utility is used, which can automatically receive and renew certificates. Let's look at all the nuances - from checking ports to editing the nginx configuration.
+<h3>Checking DNS and ports</h3>
+<pre><code class="language-bash">
+# Checking where the domain points
+dig +short node.waytohome.in.net
+nslookup node.waytohome.in.net
+
+# Checking open ports 80 and 443
+sudo ss -tulpn | grep -E ':80|:443'
+sudo netstat -tulpn | grep -E ':80|:443'
+
+# Checking firewall
+sudo ufw status
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+</code></pre>
+<h3>Installing Certbot</h3>
+<pre><code class="language-bash">
+sudo apt update
+sudo apt install certbot python3-certbot-nginx -y
+</code></pre>
+<h3>Getting a certificate (automatically via nginx)</h3>
+<pre><code class="language-bash">
+sudo certbot --nginx -d node.waytohome.in.net -d www.node.waytohome.in.net
+</code></pre>
+If you want to check the work without spending Let's Encrypt limits, add the flag <code>--staging</code>.
+<h3>Option: get only certificate files</h3>
+<pre><code class="language-bash">
+# If nginx interferes — stop first
+sudo systemctl stop nginx
+
+# Get only certificate files
+sudo certbot certonly --standalone -d node.waytohome.in.net -d www.node.waytohome.in.net
+
+# Resume nginx
+sudo systemctl start nginx
+</code></pre>
+<h3>Paths to certificates</h3>
+<pre><code class="language-bash">
+/etc/letsencrypt/live/node.waytohome.in.net/fullchain.pem # main certificate + chain
+/etc/letsencrypt/live/node.waytohome.in.net/privkey.pem # private key
+/etc/letsencrypt/options-ssl-nginx.conf
+/etc/letsencrypt/ssl-dhparams.pem
+</code></pre>
+<h3>Checking certificates</h3>
+<pre><code class="language-bash">
+# We look at the dates and who issued them to
+openssl x509 -noout -dates -issuer -subject -in /etc/letsencrypt/live/node.waytohome.in.net/fullchain.pem
+
+# We check what the server actually returns
+echo | openssl s_client -connect node.waytohome.in.net:443 -servername node.waytohome.in.net 2>/dev/null | openssl x509 -noout -dates -issuer -subject
+</code></pre>
+<pre><code class="language-bash">
+# check the correctness of the config and start nginx
+sudo nginx -t
+sudo systemctl reload nginx
+</code></pre>
+<h3>Automatic renewal of certificates</h3>
+<pre><code class="language-bash">
+# Check automatic renewal
+sudo certbot renew --dry-run
+
+# List of installed certificates
+sudo certbot certificates
+</code></pre>
+<h3>Useful commands for diagnostics</h3>
+<pre><code class="language-bash">
+# List processes listening on ports
+sudo ss -tulpn | grep -E ':80|:443|:4320'
+sudo lsof -i :4320
+
+# Kill processes on port
+sudo fuser -k 4320/tcp
+sudo kill -9 $(sudo lsof -t -i :4320)
+
+# View nginx configs
+sudo nginx -T | less
+sudo nano /etc/nginx/sites-available/node.waytohome.in.net
+
+# nginx logs
+sudo tail -n 200 /var/log/nginx/error.log
+</code></pre>
+<h2>2. Configuring Nginx to work with Node.js and Socket.IO</h2>
+Once the SSL certificates are obtained, you need to configure nginx so that it acts as a reverse proxy to our Node.js application. This will allow you to serve the site via HTTPS, as well as correctly proxy WebSocket connections for Socket.IO.
+<h3>Basic config</h3>
+Open the global nginx configuration file in the nano editor (sudo nano /etc/nginx/nginx.conf), find the subdomain block and change it to:
+<pre><code class="language-nginx">
+# --- Redirect all HTTP to HTTPS ---
+server {
+  listen 176.114.14.200:80;
+  server_name node.waytohome.in.net www.node.waytohome.in.net;
+  return 301 https://$host$request_uri;
+}
+
+# --- Node.js subdomain with HTTPS + Socket.IO ---
+server {
+  listen 176.114.14.200:443 ssl http2;
+  server_name node.waytohome.in.net www.node.waytohome.in.net;
+
+  root /var/www/sash30038383/data/www/node.waytohome.in.net/public;
+  index index.html index.htm;
+
+  # certbot certificates
+  ssl_certificate /etc/letsencrypt/live/node.waytohome.in.net/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/node.waytohome.in.net/privkey.pem;
+
+
+  location /socket.io/ {
+      proxy_pass http://127.0.0.1:4320;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "Upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+
+  # Proxying Node.js + Socket.IO
+  location / {
+    proxy_pass http://127.0.0.1:4320;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Статика
+  location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+    root /var/www/sash30038383/data/www/node.waytohome.in.net/public;
+    access_log /var/www/httpd-logs/node.waytohome.in.net.access.log;
+    error_page 404 = @fallback;
+  }
+
+  # fallback for Node.js
+  location @fallback {
+    proxy_pass http://127.0.0.1:4320;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Security /webstat
+  location ^~ /webstat/ {
+    auth_basic "Restricted area";
+    auth_basic_user_file /var/www/sash30038383/data/etc/534771.passwd;
+    try_files $uri @fallback;
+  }
+
+  # For now, we disable the include panels so that Socket.IO doesn't get interrupted
+  # include /usr/local/ispmgr/etc/nginx.inc;
+}
+</code></pre>
+<h3>Checking the config</h3>
+<pre><code class="language-bash">
+# Checking nginx syntax
+sudo nginx -t
+
+# Restarting nginx
+sudo systemctl reload nginx
+</code></pre>
+<h3>Node.js server (example)</h3>
+<pre><code class="language-javascript">
+const http = require("http");
+const express = require("express");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  }
+});
+
+io.on("connection", (socket) => {
+  console.log("🔌 New client connected");
+
+  socket.on("message", (msg) => {
+    console.log("📩 Message:", msg);
+    io.emit("message", msg);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Client is disconnected");
+  });
+});
+
+server.listen(4320, () => {
+  console.log("✅ Server and Socket.IO are running on port 4320");
+});
+</code></pre>
+<h3>Client connection code</h3>
+<pre><code class="language-javascript">
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+const socket = io("https://node.waytohome.in.net", {
+  transports: ["websocket"],
+  secure: true
+});
+
+socket.on("connect", () => {
+  console.log("✅ Successful connection:", socket.id);
+});
+
+socket.on("message", (msg) => {
+  console.log("📩 New message:", msg);
+});
+</script>
+</code></pre>
+<h3>Useful commands for working with processes</h3>
+<pre><code class="language-bash">
+# Check that port 4320 is listening
+sudo ss -tulpn | grep 4320
+
+# Look at processes on 4320
+sudo lsof -i :4320
+
+# Kill all processes on 4320
+sudo fuser -k 4320/tcp
+sudo kill -9 $(sudo lsof -t -i :4320)
+</code></pre>
+<h3>Running a Node.js application</h3>
+<pre><code class="language-bash">
+# Convenient launch with auto-restart when files change
+npm install -g nodemon // install nodemon
+nodemon server.js
+
+# Constant launch (daemon) (if it complains about pm2, use npx pm2)
+npm install -g pm2
+npx pm2 start server.js --name chat-server # start the main application file and name the process
+npx pm2 logs chat-server
+npx pm2 restart chat-server
+npx pm2 stop chat-server
+</code></pre>
+<h2>Conclusion — nodemon vs PM2, clustering and sticky-sessions (what it is and how to use it)</h2>
+When everything works in <code>nodemon</code>, but starts to issue <strong>502 Bad Gateway</strong> and “does not connect” WebSocket when launched via <code>pm2</code>, this is almost always not magic — it is an architectural feature of connection distribution and the way processes are launched.
+
+<h3>Briefly: why this happens</h3>
+<ul>
+  <li><strong>nodemon</strong> is a development tool: it simply launches one Node process, automatically restarts when changes occur. Everything is consistent — Nginx proxies to one instance, WebSocket is kept in it — no problems.</li>
+  <li><strong>PM2</strong> is a process manager for production. It has two basic modes: <em>fork</em> (one process) and <em>cluster</em> (several worker processes for scaling). In cluster mode, there is a need for "sticky" sessions or a common message bus (pub/sub), otherwise WebSocket may work unstable.</li>
+  <li>Problems arise due to two things: <em>round robin/worker switching</em> and <em>the lack of a common mechanism for passing messages between workers</em> (i.e. if the client was chatting with worker A, but the next request went to worker B, the chat breaks).</li>
+</ul>
+<h3>Solution options (practice)</h3>
+<h4>1) The simplest and most reliable is PM2 in <code>fork</code></h4> mode
+If you do not have a huge load, the recommended way is to run the application in a single process in PM2. Then Nginx proxies to one backend — WebSocket is stable.
+<pre><code class="language-bash">
+# launch in Fork mode (prod)
+npx pm2 start server.js --name chat-server
+npx pm2 save
+npx pm2 startup systemd # execute the output command for autostart
+</code></pre>
+<em>Pros:</em> simple, stable for WebSocket. <em>Cons:</em> does not provide horizontal scaling on one host.
+<h4>2) Scaling: Cluster + sticky sessions (or pub/sub)</h4>
+If you need to use multiple processes on a single host, there are two main approaches:
+<ol> <li><strong>Sticky sessions</strong> — ensure that all requests from one client will go to the same worker. This can be implemented at the nginx level (ip_hash or third-party sticky modules) or using specialized utilities (socket.io sticky balancing). A simple example for nginx is <code>ip_hash</code> upstream (suitable when each worker listens to its own port).</li><li><strong>Pub/Sub (Redis adapter)</strong> — you launch multiple workers, each responsible for its own clients, but use the Socket.IO Redis adapter so that all workers can send events to each other (broadcast). Then sticky is not required for message passing — but the connection should still remain with one worker.</li></ol>
+
+<h4>Example of running PM2 in a cluster</h4>
+<pre><code class="language-bash">
+# start maximum processes (based on CPU count)
+pm2 start server.js -i max --name chat-cluster
+</code></pre>
+<em>Important:</em> in cluster mode, it is recommended to use either sticky balancing or the Redis adapter (see below).
+<h4>3) Redis adapter (recommended for distributed applications)</h4>
+If you have multiple processes (or servers), and you want <code>io.emit</code> to reach all clients — use the Redis adapter. It synchronizes events between Socket.IO instances.
+<pre><code class="language-javascript">
+// Example (Socket.IO v4+)
+// npm i redis @socket.io/redis-adapter
+const { createAdapter } = require("@socket.io/redis-adapter");
+const { createClient } = require("redis");
+
+(async() => {
+  const pubClient = createClient({ url: "redis://127.0.0.1:6379" });
+  const subClient = pubClient.duplicate();
+  await pubClient.connect();
+  await subClient.connect();
+
+  io.adapter(createAdapter(pubClient, subClient));
+})();
+</code></pre>
+<em>Pros:</em> all processes see each other’s events; convenient for horizontal scaling (multiple servers). <em>Cons:</em> you need Redis and a bit more complexity in configuration.
+
+<h3>How to make sticky via nginx (simplified)</h3>
+The simplest "sticky" is <code>ip_hash</code> upstream. It binds the client by IP to one backend. Works in simple networks, but is not ideal for NAT / proxy / mobile clients.
+<pre><code class="language-nginx">
+upstream node_app {
+  ip_hash;
+  server 127.0.0.1:4320;
+  server 127.0.0.1:4321;
+  # if you have multiple ports/instances
+}
+
+server {
+  listen 443 ssl http2;
+  server_name node.waytohome.in.net;
+
+  location /socket.io/ {
+    proxy_pass http://node_app/socket.io/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_read_timeout 3600s;
+  }
+
+  location / {
+    proxy_pass http://node_app;
+    proxy_set_header Host $host;
+  }
+}
+</code></pre>
+<em>Important:</em> if you use PM2 cluster (when all processes listen to the same port) — <code>ip_hash</code> won't help: nginx sees only one address and sends there; Node cluster internally distributes connections itself, and then a separate sticky implementation or the use of specialized solutions is required (for example, socket.io sticky from the authors of socket.io or the nginx-sticky-module module).
+
+<h3>Timeouts and proxy settings (required for WebSocket)</h3>
+WebSocket connections should live a long time - set adequate timeouts in nginx:
+<pre><code class="language-nginx">
+proxy_connect_timeout 60s;
+proxy_send_timeout 60s;
+proxy_read_timeout 3600s; # or more, depending on the load
+send_timeout 60s;
+</code></pre>
+<h3>Ready-made commands and tips (PM2)</h3>
+<pre><code class="language-bash">
+# Start in fork (recommended for WebSocket)
+pm2 start server.js --name chat-server
+
+# Start in cluster (if you implemented sticky/publish)
+pm2 start server.js -i max --name chat-cluster
+
+# View logs / status
+pm2 logs chat-server
+pm2 status
+pm2 monit
+
+# Save configuration and autostart
+pm2 save
+pm2 startup systemd # execute generated command after
+</code></pre>
+<h3>Additional features: correct start and ready-hook</h3>
+Sometimes PM2 starts, and nginx does healthcheck before Node is fully up → 502. You can use <code>--wait-ready</code> and signal <code>process.send('ready')</code> from the app to make PM2 wait for start:
+<pre><code class="language-bash">
+# start and wait for ready
+pm2 start server.js --name chat-server --wait-ready
+</code></pre>
+<pre><code class="language-javascript">
+// In server.js: after server.listen(...)
+server.listen(PORT, () => {
+  console.log('listening...');
+  if (process.send) process.send('ready'); // pm2 will get ready
+});
+</code></pre>
+<h3>Diagnosing 502 / WebSocket issues</h3>
+<ul><li>Check if Node is listening on the right port: <code>(sudo ss -tulpn | grep 4320)</code> or <code>(sudo lsof -i :4320)</code>.</li>
+  <li>Check Nginx logs: <code>sudo tail -n 200 /var/log/nginx/error.log</code>.</li> <li>Check PM2 logs: <code>pm2 logs chat-server</code>.</li>
+  <li>Check if you can connect to Socket.IO directly (without nginx) from the host: <code>curl -i http://127.0.0.1:4320/socket.io/?EIO=4&amp;transport=polling</code> or <code>wscat -c wss://node.waytohome.in.net/socket.io/?EIO=4&amp;transport=websocket</code>.</li></ul>
+
+<h3>Recommendations for selection</h3>
+<ul><li><strong>Small project / simple chat:</strong> PM2 fork mode (one process), nginx → proxy_pass → 127.0.0.1:4320. The simplest and most stable option.</li>
+  <li><strong>Growth and load:</strong> use Redis adapter and run multiple instances; ensure sticky (via balancer) or use official sticky mechanisms from Socket.IO.</li>
+  <li><strong>Very heavy load / microservices:</strong> use a dedicated balancer with sticky support (or L4 load balancer), Redis/Message broker for synchronization and horizontal scaling.</li></ul>
+<h3>Short checklist before release</h3>
+<ol><li>Node is running and listening to the port → <code>ss / lsof</code>.</li><li>Nginx is checked → <code>nginx -t</code> and <code>systemctl restart nginx</code>.</li><li>proxy_set_header Upgrade / Connection «upgrade» are registered.</li><li>proxy_read_timeout is increased for long ws-connections.</li><li>if cluster — Redis adapter or sticky is configured.</li><li>pm2 save + pm2 startup for autostart.</li></ol>

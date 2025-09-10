@@ -1,0 +1,141 @@
+<h2>Вступ</h2>
+npm та Yarn – це найпопулярніші менеджери пакетів для Node.js.
+За допомогою них ми встановлюємо бібліотеки, керуємо версіями і навіть публікуємо свої пакети.
+У цій статті розберемо, чим вони відрізняються, як ставити залежності та як написати свій пакет.
+<h2>Що таке npm та Yarn</h2>
+npm - вбудований менеджер пакетів, що встановлюється разом з Node.js.
+Yarn – альтернатива від Facebook, орієнтована на швидкість та стабільність.
+
+Обидва працюють через <em>package.json</em>, де зберігаються залежності проекту.
+<h2>Створення package.json</h2>
+<pre><code class="language-javascript">
+npm init -y
+# або
+yarn init -y
+</code></pre>
+<h2>Встановлення залежностей</h2>
+<h3>npm</h3>
+<pre><code class="language-javascript">
+npm install express
+npm install lodash --save
+npm install nodemon --save-dev
+</code></pre>
+<h3>Yarn</h3>
+<pre><code class="language-javascript">
+yarn add express
+yarn add lodash
+yarn add nodemon --dev
+</code></pre>
+<h2>Різниця у lock-файлах</h2>
+npm використовує <em>package-lock.json</em>, Yarn - <em>yarn.lock</em>.
+Ці файли фіксують версії залежностей, щоб проект працював однаково в усіх розробників.
+<h2>Видалення пакета</h2>
+<pre><code class="language-javascript">
+npm uninstall express
+yarn remove express
+</code></pre>
+<h2>Глобальні пакети</h2>
+<pre><code class="language-javascript">
+npm install -g nodemon
+yarn global add nodemon
+</code></pre>
+<h2>Скрипти</h2>
+У package.json можна зберігати команди:
+<pre><code class="language-javascript">
+"scripts": {
+"start": "node app.js",
+"dev": "nodemon app.js"
+}
+</code></pre>
+Запуск:
+<pre><code class="language-javascript">
+npm run dev
+yarn dev
+</code></pre>
+<h2>Як написати свій пакет</h2>
+1. Створи нову папку проекту.
+2. Зроби <code>npm init-y</code>.
+3. Додай код у <em>index.js</em>.
+4. У <em>package.json</em> вкажи "main": "index.js".
+5. Залогінься: <code>npm login</code>.
+6. Опублікуй: <code>npm publish</code>.
+<h3>Приклад простого пакету</h3>
+<pre><code class="language-javascript">
+//index.js
+function greet(name) {
+return `Hello, ${name}!`;
+}
+
+module.exports = {greet};
+</code></pre>
+Використання в іншому проекті:
+<pre><code class="language-javascript">
+const {greet} = require('my-first-package');
+console.log(greet("World"));
+</code></pre>
+<h2>Поширені пакети</h2>
+<ul>
+  <li>express — веб-фреймворк</li>
+  <li>mongoose - робота з MongoDB</li>
+  <li>pg — драйвер PostgreSQL</li>
+  <li>mysql2 є драйвером MySQL</li>
+  <li>cors — налаштування CORS</li>
+  <li>dotenv — змінні оточення</li>
+  <li>nodemon — автоперезапуск сервера</li>
+  <li>axios - HTTP-клієнт</li>
+  <li>joi - валідація даних</li>
+  <li>bcrypt — хешування паролів</li>
+  <li>jsonwebtoken - JWT-авторизація</li>
+  <li>socket.io - WebSocket</li>
+  <li>winston - логування</li>
+  <li>morgan — лог запитів</li>
+  <li>jest - тестування</li>
+</ul>
+<h2>Порівняння npm та Yarn</h2>
+<table border="1" cellspacing="0" cellpadding="6">
+  <tr>
+    <th>Критерій</th>
+    <th>npm</th>
+    <th>Yarn</th>
+  </tr>
+  <tr>
+    <td>Установка</td>
+    <td>Входить у комплекті з Node.js</td>
+    <td>Встановлюється окремо</td>
+  </tr>
+  <tr>
+    <td>Lock-файл</td>
+    <td>package-lock.json</td>
+    <td>yarn.lock</td>
+  </tr>
+  <tr>
+    <td>Швидкість</td>
+    <td>npm 7+ став значно швидше, але поступається</td>
+    <td>Швидше при великій кількості пакетів</td>
+  </tr>
+  <tr>
+    <td>Кешування</td>
+    <td>Є, але менш ефективно</td>
+    <td>Потужне кешування та офлайн-режим</td>
+  </tr>
+  <tr>
+    <td>Підтримка workspaces</td>
+    <td>Є (c npm v7)</td>
+    <td>Є, реалізовано раніше</td>
+  </tr>
+  <tr>
+    <td>Сумісність</td>
+    <td>Стандарт де-факто підтримується скрізь</td>
+    <td>Сумісний з npm-пакетами</td>
+  </tr>
+  <tr>
+    <td>Поріг входу</td>
+    <td>Мінімальний, відразу доступний після встановлення Node.js</td>
+    <td>Трохи вище, потрібен окремий інструмент</td>
+  </tr>
+</table>
+<h2>Підсумок</h2>
+npm і Yarn вирішують одне завдання – управління залежностями.
+npm – стандарт і йде разом з Node.js. Yarn — альтернатива, яка швидше працює у великих проектах.
+Використовуй будь-який, але не змішуй їх в одному проекті.
+А для повного досвіду спробуй написати та опублікувати свій пакет.

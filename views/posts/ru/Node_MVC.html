@@ -1,0 +1,149 @@
+<h2>Что такое MVC</h2>
+MVC (Model-View-Controller) — это архитектурный паттерн, который разделяет проект на три слоя:
+Model (Модель) — отвечает за работу с данными (например, база MySQL).
+View (Представление) — то, что видит пользователь (HTML, CSS, JS).
+Controller (Контроллер) — посредник между моделью и видом, обрабатывает запросы, вызывает нужные модели и передаёт результат во View.
+
+Такой подход делает код:
+- более читаемым,
+- проще для поддержки,
+- гибче для расширения.
+
+Базовая структура проекта
+<pre><code class="language-javascript">
+myapp/
+│
+├── app.js             # Точка входа (Express сервер)
+├── routes/            # Маршруты
+│   └── index.js
+├── controllers/       # Контроллеры
+│   └── postController.js
+├── models/            # Модели
+│   └── postModel.js
+├── views/             # Представления (шаблоны или статика)
+│   └── posts.ejs
+└── public/
+│   └── img
+│   └── js
+│   └── css
+└── package.json
+
+</code></pre>
+
+<h3>Шаг 1. Настройка сервера</h3>
+app.js
+<pre><code class="language-javascript">
+const express = require('express');
+const app = express();
+const routes = require('./routes/index');
+
+app.set('view engine', 'ejs'); // можно использовать ejs/pug/handlebars
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Подключаем маршруты
+app.use('/', routes);
+
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Server started on http://localhost:${PORT}`));
+</code></pre>
+<h3>Шаг 2. Маршруты</h3>
+routes/index.js
+<pre><code class="language-javascript">
+const express = require('express');
+const router = express.Router();
+const postController = require('../controllers/postController');
+
+// список постов
+router.get('/posts', postController.list);
+
+// один пост
+router.get('/posts/:id', postController.details);
+
+// создать новый пост (пример POST запроса)
+router.post('/posts', postController.create);
+
+module.exports = router;
+</code></pre>
+<h3>Шаг 3. Контроллеры</h3>
+controllers/postController.js
+<pre><code class="language-javascript">
+const Post = require('../models/postModel');
+
+exports.list = async (req, res) => {
+  const posts = await Post.getAll();
+  res.render('posts', { posts });
+};
+
+exports.details = async (req, res) => {
+  const post = await Post.getById(req.params.id);
+  if (!post) return res.status(404).send('Not found');
+  res.json(post);
+};
+
+exports.create = async (req, res) => {
+  const { title, content } = req.body;
+  await Post.create(title, content);
+  res.redirect('/posts');
+};
+</code></pre>
+<h3>Шаг 4. Модели</h3>
+models/postModel.js
+<pre><code class="language-javascript">
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+  host: 'localhost',
+  user: 'root',
+  database: 'mvc_test'
+});
+
+exports.getAll = async () => {
+  const [rows] = await pool.query('SELECT * FROM posts ORDER BY created_at DESC');
+  return rows;
+};
+
+exports.getById = async (id) => {
+  const [rows] = await pool.query('SELECT * FROM posts WHERE id = ?', [id]);
+  return rows[0];
+};
+
+exports.create = async (title, content) => {
+  await pool.query('INSERT INTO posts (title, content, created_at) VALUES (?, ?, UNIX_TIMESTAMP())', [title, content]);
+};
+</code></pre>
+<h3>Шаг 5. Представления</h3>
+views/posts.ejs
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Посты</title>
+  </head>
+  <body>
+  <h1>Список постов</h1>
+
+  <ul>
+    <% posts.forEach(p => { %>
+        <li><b><%= p.title %></b> — <%= p.content %></li>
+    <% }) %>
+  </ul>
+
+  <form action="/posts" method="POST">
+    <input type="text" name="title" placeholder="Заголовок">
+    <textarea name="content" placeholder="Текст"></textarea>
+    <button type="submit">Добавить</button>
+  </form>
+  </body>
+</html>
+</code></pre>
+<h3>Итог</h3>
+Мы получили классическое MVC-приложение на Node.js:
+Model (postModel) работает с БД.
+Controller (postController) получает запросы и вызывает модель.
+View (EJS) отображает данные.
+Router управляет маршрутами.
+app.js связывает всё вместе.
+
+👉 На таком подходе легко строить новостники, блоги, магазины, чаты — любое CRUD-приложение.

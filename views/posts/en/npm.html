@@ -1,0 +1,141 @@
+<h2>Introduction</h2>
+npm and Yarn are the most popular package managers for Node.js.
+They allow us to install libraries, manage versions, and even publish our own packages.
+In this article, we will discuss their differences, how to install dependencies, and how to create your own package.
+<h2>What are npm and Yarn</h2>
+npm — the built-in package manager, installed with Node.js.
+Yarn — an alternative from Facebook, focused on speed and stability.
+
+Both work through <em>package.json</em>, which stores the project dependencies.
+<h2>Creating package.json</h2>
+<pre><code class="language-javascript">
+npm init -y
+# or
+yarn init -y
+</code></pre>
+<h2>Installing dependencies</h2>
+<h3>npm</h3>
+<pre><code class="language-javascript">
+npm install express
+npm install lodash --save
+npm install nodemon --save-dev
+</code></pre>
+<h3>Yarn</h3>
+<pre><code class="language-javascript">
+yarn add express
+yarn add lodash
+yarn add nodemon --dev
+</code></pre>
+<h2>Difference in lock files</h2>
+npm uses <em>package-lock.json</em>, Yarn uses <em>yarn.lock</em>.
+These files lock dependency versions so the project works the same for all developers.
+<h2>Removing a package</h2>
+<pre><code class="language-javascript">
+npm uninstall express
+yarn remove express
+</code></pre>
+<h2>Global packages</h2>
+<pre><code class="language-javascript">
+npm install -g nodemon
+yarn global add nodemon
+</code></pre>
+<h2>Scripts</h2>
+In package.json you can store commands:
+<pre><code class="language-javascript">
+"scripts": {
+  "start": "node app.js",
+  "dev": "nodemon app.js"
+}
+</code></pre>
+Run:
+<pre><code class="language-javascript">
+npm run dev
+yarn dev
+</code></pre>
+<h2>How to create your own package</h2>
+1. Create a new project folder.
+2. Run <code>npm init -y</code>.
+3. Add code in <em>index.js</em>.
+4. In <em>package.json</em> specify "main": "index.js".
+5. Log in: <code>npm login</code>.
+6. Publish: <code>npm publish</code>.
+<h3>Example of a simple package</h3>
+<pre><code class="language-javascript">
+// index.js
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+
+module.exports = { greet };
+</code></pre>
+Using it in another project:
+<pre><code class="language-javascript">
+const { greet } = require('my-first-package');
+console.log(greet("World"));
+</code></pre>
+<h2>Frequently used packages</h2>
+<ul>
+  <li>express — web framework</li>
+  <li>mongoose — MongoDB integration</li>
+  <li>pg — PostgreSQL driver</li>
+  <li>mysql2 — MySQL driver</li>
+  <li>cors — CORS setup</li>
+  <li>dotenv — environment variables</li>
+  <li>nodemon — auto-restart server</li>
+  <li>axios — HTTP client</li>
+  <li>joi — data validation</li>
+  <li>bcrypt — password hashing</li>
+  <li>jsonwebtoken — JWT authentication</li>
+  <li>socket.io — WebSocket</li>
+  <li>winston — logging</li>
+  <li>morgan — request logging</li>
+  <li>jest — testing</li>
+</ul>
+<h2>Comparing npm and Yarn</h2>
+<table border="1" cellspacing="0" cellpadding="6">
+  <tr>
+    <th>Criteria</th>
+    <th>npm</th>
+    <th>Yarn</th>
+  </tr>
+  <tr>
+    <td>Installation</td>
+    <td>Comes bundled with Node.js</td>
+    <td>Installed separately</td>
+  </tr>
+  <tr>
+    <td>Lock file</td>
+    <td>package-lock.json</td>
+    <td>yarn.lock</td>
+  </tr>
+  <tr>
+    <td>Speed</td>
+    <td>npm 7+ became much faster, but still slower</td>
+    <td>Faster for large number of packages</td>
+  </tr>
+  <tr>
+    <td>Caching</td>
+    <td>Available, but less efficient</td>
+    <td>Powerful caching and offline mode</td>
+  </tr>
+  <tr>
+    <td>Workspaces support</td>
+    <td>Yes (since npm v7)</td>
+    <td>Yes, implemented earlier</td>
+  </tr>
+  <tr>
+    <td>Compatibility</td>
+    <td>De facto standard, supported everywhere</td>
+    <td>Compatible with npm packages</td>
+  </tr>
+  <tr>
+    <td>Entry barrier</td>
+    <td>Minimal, available immediately after Node.js installation</td>
+    <td>Slightly higher, requires a separate tool</td>
+  </tr>
+</table>
+<h2>Conclusion</h2>
+npm and Yarn solve the same task — dependency management.
+npm — the standard, comes with Node.js. Yarn — an alternative, works faster in large projects.
+Use either, but don't mix them in one project.
+For full experience, try creating and publishing your own package.

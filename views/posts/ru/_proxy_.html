@@ -1,0 +1,168 @@
+
+Для начала заходим в консоль сервера через SSH:
+<pre><code class="language-javascript">
+ssh root@176.214.14.203 // ip сервера
+Вводим пароль и попадаем в ОС сервера
+</code></pre>
+Что нам здесь надо дальше. Проверить установлен ли Node.js и если нет то установить.
+<pre><code class="language-javascript">
+node -v // если покажет значит нода стоит. Если нет
+//Добавляем репозиторий для стабильной версии (например, 20.x):
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+//Устанавливаем Node.js (npm ставится автоматически):
+sudo apt install -y nodejs
+//Проверяем установку
+node -v
+npm -v
+//Должны появиться версии Node.js и npm
+//Устанавливаем PM2 для управления процессами ноды
+sudo npm install -g pm2
+</code></pre>
+Теперь запустим наше ноде-приложение. У меня точка входа - app.js
+Для боевого сервера не запускаем через "node app.js" напрямую, иначе при закрытии SSH процесс умрёт. Используюем pm2:
+<pre><code class="language-javascript">
+pm2 start app.js --name "nodesite"
+pm2 save
+pm2 startup //Это позволит приложению работать постоянно.
+</code></pre>
+Должна появиться красивая табличка где будет зелёным гореть online)
+
+Запросы на домен или поддомен идут стандартно на nginx 80й порт. Нужно перенаправить их на Node.js. Сначала пытался сделать это через файлы конфигов домена, не получалось, пришлось лезть в глобальный конфиг nginx. Открываем чераз стандартную программу nano. В Ubuntu глобальный конфиг Nginx обычно находится по пути: /etc/nginx/nginx.conf. Чтобы открыть и редактировать его:
+<pre><code class="language-javascript">
+sudo nano /etc/nginx/nginx.conf
+или через vim:
+sudo vim /etc/nginx/nginx.conf
+</code></pre>
+Вот что там было для моего поддомена:
+<pre><code class="language-javascript">
+server {
+  server_name node.waytohome.in.net www.node.waytohome.in.net;
+  listen 176.114.14.200;
+  disable_symlinks if_not_owner from=$root_path;
+  set $root_path /var/www/sash30038383/data/www/node.waytohome.in.net;
+  location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+    root $root_path;
+    access_log /var/www/nginx-logs/sash30038383 isp;
+    access_log /var/www/httpd-logs/node.waytohome.in.net.access.log ;
+    error_page 404 = @fallback;
+  }
+  location / {
+    proxy_pass http://176.114.14.200:81;
+    proxy_redirect http://176.114.14.200:81/ /;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+  location ~* ^/(webstat|awstats|webmail|myadmin|pgadmin)/ { //и дальше блоки настроек для server
+  }
+}
+</code></pre>
+Заменил весь этот блок на
+<pre><code class="language-javascript">
+# --- Поддомен Node.js ---
+server {
+  listen 176.114.14.200:80;  # твой IP сервера
+  server_name node.waytohome.in.net www.node.waytohome.in.net;
+
+  # Корневая папка для статики (если есть)
+  set $root_path /var/www/sash30038383/data/www/node.waytohome.in.net/public;
+
+  # Отдаём статику напрямую
+  location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+      root $root_path;
+      access_log /var/www/nginx-logs/sash30038383 isp;
+      access_log /var/www/httpd-logs/node.waytohome.in.net.access.log;
+      error_page 404 = @fallback;
+  }
+
+  # Проксируем все остальное на Node.js
+  location / {
+      proxy_pass http://127.0.0.1:4320;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+  }
+
+  # Пример защиты /webstat
+  location ^~ /webstat/ {
+      auth_basic "Restricted area";
+      auth_basic_user_file /var/www/sash30038383/data/etc/534771.passwd;
+      try_files $uri @fallback;
+  }
+
+  # fallback для ошибок 404
+  location @fallback {
+      proxy_pass http://127.0.0.1:4320;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+  }
+
+  # Включаем настройки ISPmanager
+  include /usr/local/ispmgr/etc/nginx.inc;
+}
+
+</code></pre>
+После этого нужно перезагрузить nginx, нода у нас запущена слушает указанный порт (у меня 4320)
+<pre><code class="language-javascript">
+sudo nginx -t # Проверка конфигурации
+sudo systemctl reload nginx //или
+sudo systemctl restart nginx
+</code></pre>
+После этого всё открылось у меня, дай Бог и у вас сработает 😊🤝
+
+Теперь сделаем боевой конфиг PM2, который можно будет использовать хоть на тестовом, хоть на продакшене. Создаём файл ecosystem.config.js в корне проекта:
+<pre><code class="language-javascript">
+module.exports = {
+  apps: [
+    {
+      name: "myapp",              // имя приложения (любое)
+      script: "app.js",           // точка входа (или server.js)
+      instances: 1,               // количество процессов (1 = обычный режим)
+      autorestart: true,          // авто-ребут при падении
+      watch: true,               // следить за файлами (лучше false на проде)
+      watch_delay: 1000, // задержка чтобы не дергался постоянно
+      max_memory_restart: "300M", // перезапуск если >300МБ памяти
+      max_memory_restart: "300M", // перезапуск если >300МБ памяти
+      env: {
+      NODE_ENV: "development",  // переменные окружения для dev
+    },
+    env_production: {
+      NODE_ENV: "production"    // переменные окружения для prod
+    },
+      error_file: "./logs/err.log",  // ошибки
+      out_file: "./logs/out.log",    // обычные логи
+      log_date_format: "YYYY-MM-DD HH:mm:ss"
+    }
+  ]
+};
+</code></pre>
+Команды управления:
+
+pm2 start ecosystem.config.js --env production --watch  # запуск
+
+🔸 Если ругается Запустить через npx. Тогда PowerShell не трогает .ps1:
+
+npx pm2 start ecosystem.config.js --env production --watch
+npx pm2 restart myapp  # перезапуск
+npx pm2 stop myapp     # стоп
+npx pm2 delete myapp   # удалить
+npx pm2 logs myapp     # смотреть логи
+npx pm2 monit          # мониторинг в консоли
+
+Сохранение состояния (чтобы после ребута сервера всё стартовало)
+pm2 save
+pm2 startup
+
+📦 В итоге у нас будет:
+Постоянная работа Node.js
+Авто-перезапуск при сбое или утечке памяти
+Красивые логи в ./logs/
+Возможность лёгкого обновления через одну команду
+

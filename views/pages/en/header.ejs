@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<head>
+
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+    <meta charset="UTF-8">
+
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate"/>
+    <meta http-equiv="pragma" content="no-cache"/>
+    <meta http-equiv="expires" content="Fri, 20 Mar 2014 00:00:00 GMT"/>
+
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title><%= title %></title>
+
+    <meta name="description" content="<%= description %>">
+
+    <link href='/img/logo/1.ico' rel='shortcut icon' type='image/x-icon'>
+
+
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300.800.600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600&display=swap" rel="stylesheet">
+
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    <link rel="stylesheet" href="/js/prism.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/adaptive.css">
+    <link rel="stylesheet" href="/js/lightbox2.css">
+
+    <script src="/js/jquery.js" type="text/javascript">
+    </script>
+
+</head>
+<body>
+
+<header class="site-header">
+    <span class="flags"><%- flags %></span>
+    <div class="logo">
+        <a href="/<%= lang %>" class="ajax-link"><img src="/img/logo.png" alt="Логотип"></a>
+    </div>
+    <nav class="main-nav">
+        <img src="/img/logo/3.png" alt="Node.js">
+        <img id="link" src="/img/logo/1.jpg" alt="Node.js">
+        <img id="io" src="/img/logo/5.png" alt="Node.js">
+
+    </nav>
+    <div id="forSearch"><img src="/img/user.png" id="enter" alt="Node.js"><img src="/img/lupa.png" id="search" alt="">
+    </div>
+    <img src="/img/six2.png" id="six" alt="open">
+</header>
+<div id="formenu">
+    <div id="menu">
+        <img src="/img/fon.png" alt="">
+        <div id="inside">
+            <a target="_blank" href="https://waytohome.in.net/studio/php_">PHP</a>
+            <a target="_blank" href="https://waytohome.in.net/studio/jquery">jQuery</a>
+            <a target="_blank" href="https://waytohome.in.net/forum">Forum</a>
+            <a target="_blank" href="https://waytohome.in.net/studio/javascript">JavaScript</a>
+            <a target="_blank" href="https://waytohome.in.net">Vedic Knowledge</a>
+            <a target="_blank" href="https://waytohome.in.net/studio/css">HTML&CSS</a>
+            <a target="_blank" href="https://waytohome.in.net/studio/mysql">MySQL</a>
+        </div>
+    </div>
+</div>
+<div class="search">
+    <div id="searchBox" contenteditable="true"></div>
+    <div id="results"></div>
+</div>
+
+<!-- Модалка -->
+<div id="authModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+
+        <h2 id="formTitle">Login</h2>
+
+        <!-- Login / Registration Form -->
+        <form id="authForm">
+            <!-- Name (for registration only) -->
+            <div class="form-group reg-only hidden">
+                <input type="text" name="name" placeholder="Name"
+                       pattern="[A-Za-zА-Яа-яЁё0-9_ ]{3,20}"
+                       title="Only letters, numbers and underscores (3-20 characters)">
+            </div>
+
+            <!-- email -->
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email" required>
+            </div>
+
+            <!-- password -->
+            <div class="form-group avatar">
+                <input type="password" name="password" placeholder="Password" minlength="3" required>
+                <img src="/uploads/avatars/default.png" alt="" id="avatara">
+                <input type="file" name="avatar" id="avatar">
+            </div>
+
+            <!-- password confirmation (for registration only) -->
+            <div class="form-group reg-only hidden">
+                <input type="password" name="password_confirmation" placeholder="Confirm password" minlength="3">
+            </div>
+
+            <button type="submit" id="submitBtn">Login</button>
+
+            <div class="form-footer">
+                <a href="#" id="toggleForm">Don't have an account? Registration</a>
+                <br>
+                <a href="#" id="forgotPassword">Forgot your password?</a>
+            </div>
+        </form>
+
+        <!-- Password reset form -->
+        <form id="resetForm" class="hidden">
+            <div class="form-group">
+                <input type="email" name="reset_email" placeholder="Your Email" required>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="new_password" placeholder="New password" minlength="3" required>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="new_password_confirmation" placeholder="Confirm password" minlength="3" required>
+            </div>
+
+            <button type="submit" id="submitBtn2">Update password</button>
+
+            <div class="form-footer">
+                <a href="#" id="backToLogin">Back to login</a>
+            </div>
+        </form>
+    </div>
+</div>

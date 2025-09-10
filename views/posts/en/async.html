@@ -1,0 +1,189 @@
+
+Asynchrony is a key feature of <strong>Node.js</strong> that allows it to handle multiple requests simultaneously without blocking the main program. Understanding how asynchronous code works is important for anyone writing in Node.js.
+
+In this article, we'll look at three main ways to work with asynchrony: <strong>callbacks</strong>, <strong>promises</strong>, and <strong>async/await</strong>.
+
+<h2>🔹 Why is asynchrony important?</h2>
+Node.js runs on an <strong>event loop</strong> and uses a <strong>single thread</strong>. This means:
+<ul>
+  <li>It does not create a new thread for each request (like PHP or Java).</li>
+  <li>Instead, it "defers" heavy operations (like querying a database or reading a file) and continues executing other code.</li>
+</ul>
+<strong>Example:</strong> the server can handle hundreds of connections at once without blocking on a long database query.
+<h2>1. Callbacks</h2>
+<strong>Callback</strong> is a function that is passed as an argument and called after the operation is completed.
+<pre><code class="language-javascript">
+const fs = require('fs');
+
+fs.readFile('data.txt', 'utf8', (err, data) => {
+  if (err) {
+    console.error('Error reading file:', err);
+    return;
+  }
+  console.log('File contents:', data);
+});
+
+console.log('This code will be executed before the file is read');
+</code></pre>
+<strong>Cons of callbacks:</strong>
+<pre><code class="language-javascript">
+step1(data, (res1) => {
+  step2(res1, (res2) => {
+    step3(res2, (res3) => {
+      step4(res3, (res4) => {
+        console.log('Готово!');
+      });
+    });
+  });
+});
+</code></pre>
+<h2>2. Promises</h2>
+<strong>Promise</strong> is an object that represents the result of an asynchronous operation:
+<ul>
+  <li><code>pending</code> — the operation is executing.</li>
+  <li><code>fulfilled</code> — completed successfully.</li>
+  <li><code>rejected</code> — an error.</li>
+</ul>
+<pre><code class="language-javascript">
+const fs = require('fs').promises;
+
+fs.readFile('data.txt', 'utf8')
+  .then(data => {
+    console.log('File contents:', data);
+  })
+  .catch(err => {
+    console.error('Error reading file:', err);
+  });
+</code></pre>
+<strong>Promises chain:</strong>
+<pre><code class="language-javascript">
+fetchData()
+  .then(processData)
+  .then(saveData)
+  .then(() => console.log('Done!'))
+  .catch(err => console.error('Error:', err));
+</code></pre>
+<h2>3. Async / Await</h2>
+<code>async/await</code> is syntactic sugar over promises. Allows you to write asynchronous code as if it were synchronous.
+<pre><code class="language-javascript">
+const fs = require('fs').promises;
+
+async function readFile() {
+  try {
+    const data = await fs.readFile('data.txt', 'utf8');
+    console.log('File contents:', data);
+  } catch (err) {
+    console.error('Error reading file:', err);
+  }
+}
+
+readFile();
+</code></pre>
+<strong>Chain in async/await:</strong>
+<pre><code class="language-javascript">
+// Asynchronous function main — "entry point"
+async function main() {
+  try {
+    // 1. Wait for data from an asynchronous source (e.g., from a database or API)
+    const raw = await fetchData();
+
+    // 2. Process the received data
+    const processed = await processData(raw);
+
+    // 3. Save the result (e.g., to a database or file)
+    await saveData(processed);
+
+    // 4. Notify that everything was completed successfully
+    console.log('Done!');
+  } catch (err) {
+    // If an error occurs at any of the steps, we'll get here
+    console.error('Error:', err);
+  }
+}
+
+main();
+</code></pre>
+<h2>🔹 Comparison of approaches</h2>
+<table>
+  <tr>
+    <th>Approach</th>
+    <th>Pros</th>
+    <th>Cons</th>
+  </tr>
+  <tr>
+    <td>Callbacks</td>
+    <td>Simple, basic</td>
+    <td>"Callback hell", hard to read</td>
+  </tr>
+  <tr>
+    <td>Promises</td>
+    <td>Chains are cleaner than callbacks</td>
+    <td>Nesting is still possible</td>
+  </tr>
+  <tr>
+    <td>Async/Await</td>
+    <td>The most readable and modern</td>
+    <td>Works only with promises</td>
+  </tr>
+</table>
+<h2>🔹 When to use what?</h2>
+<ul>
+  <li><strong>Callbacks</strong>: almost never used directly, except for old libraries.</li>
+  <li><strong>Promises</strong>: when you need to work with <code>Promise.all</code> or the API returns promises.</li>
+  <li><strong>Async/Await</strong>: the standard for modern code.</li>
+</ul>
+<h2>🔹 Summary</h2>
+Async is the heart of Node.js.
+<ul>
+  <li>Previously, all code was written on callbacks, then came promises.</li>
+  <li>Today, the main standard is <code>async/await</code>.</li>
+  <li>In production, they often combine: <code>await</code> + <code>Promise.all</code> for parallel tasks.</li>
+</ul>
+<h2>📊 Comparison of the same example</h2>
+Let's say we need to read the file <code>data.txt</code> and output its contents. Here's how it would look in three different ways:
+<h3>1️⃣ Callbacks</h3>
+<pre><code class="language-javascript">
+const fs = require('fs');
+// readFile works asynchronously and does not return the result immediately.
+// Instead, we pass a COLLAB (function) that will be called AFTER the operation is completed.
+fs.readFile('data.txt', 'utf8', (err, data) => {
+  if (err) {
+    console.error('Error reading file:', err);
+    return;
+  }
+  console.log('File contents:', data);
+});
+</code></pre>
+<h3>2️⃣ Promises</h3>
+<pre><code class="language-javascript">
+const fs = require('fs').promises;
+
+fs.readFile('data.txt', 'utf8')
+  .then(data => {
+    console.log('File contents:', data);
+  })
+  .catch(err => {
+    console.error('Error reading file:', err);
+  });
+</code></pre>
+<h3>3️⃣ Async / Await</h3>
+<pre><code class="language-javascript">
+const fs = require('fs').promises;
+
+async function main() {
+  try {
+    const data = await fs.readFile('data.txt', 'utf8');
+    console.log('File content:', data);
+  } catch (err) {
+    console.error('Error reading file:', err);
+  }
+}
+
+main();
+</code></pre>
+<h2>✅ What can you see from the comparison?</h2>
+<ul>
+  <li>The code on <strong>callbacks</strong> works, but looks cumbersome.</li>
+  <li>With <strong>promises</strong> the code becomes cleaner and more structured.</li>
+  <li>With <strong>async/await</strong> the code is maximally readable and similar to synchronous.</li>
+</ul>

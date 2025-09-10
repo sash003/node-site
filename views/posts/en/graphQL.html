@@ -1,0 +1,477 @@
+<h2>What is GraphQL and why it appeared</h2>
+GraphQL is a query language for APIs and a runtime for executing those queries. It was invented at Facebook in 2012, when it became clear that classical REST does not always handle the tasks in complex systems. In 2015 the project was open-sourced, and today GraphQL is used by GitHub, Airbnb, Shopify, Pinterest, and many other companies.
+
+Initially, the goal was to speed up the Facebook mobile app. The problem was that when loading data from different databases simultaneously (for example, MySQL and Redis), the interface started to lag badly. This was especially critical in a social network, where the user needs posts, likes, and comments all at once. GraphQL became the solution: it allows you to make a single request and get exactly the data you need, without any extra.
+
+<h3>Why REST is not always convenient</h3>
+REST is good, but it has a number of limitations:
+
+Redundant or insufficient data. In REST, the client often receives too many fields, or too few, and has to send additional requests. In GraphQL you can specify only the fields you need and get everything at once.
+
+Many different endpoints. In REST, each resource has its own path: /users, /posts, /comments. Over time, this complicates maintenance and versioning of the API. In GraphQL there is always a single universal endpoint.
+
+The N+1 problem with queries. In REST, for related data, you have to hit new addresses every time (for example, first request the list of users, then for each — their posts). GraphQL allows you to describe relationships directly in the query and return all necessary data at once.
+
+<h3>Real-life example</h3>
+Imagine the task: we need to get a list of users and their latest posts.
+
+In REST it would look like this:
+Request the list of users via /users
+For each user additionally request their posts via /posts?user_id=...
+
+As a result, many separate requests are made.
+
+In GraphQL this is done with a single query:
+<pre><code class="language-javascript">
+{
+  users {
+    id
+    name
+    posts(limit: 5) {
+      title
+      createdAt
+    }
+  }
+}
+</code></pre>
+The result is a neat JSON only with the fields you explicitly requested.
+
+<h3>Conclusion</h3>
+GraphQL can be called the next step after REST. It eliminates unnecessary requests, speeds up applications, and makes APIs more flexible and convenient.
+
+And how does it work? It’s all in the very concept of GraphQL. It is built around a data structure in the form of a graph. In this graph, nodes are entities (for example, user, post, comment), and edges are the relationships between them. This approach reflects the real structure of data and allows relationships to be described flexibly.
+
+That’s where the name comes from — GraphQL. Unlike REST, where each resource has a separate endpoint, in GraphQL you can move through relationships and fetch only what you need.
+
+Imagine we have a social network. In the graph there are users, each has posts, posts have comments, and comments have authors. In REST you would have to make a bunch of separate requests, while in GraphQL a single query is enough, where these relations are specified directly in the query structure.
+
+So how do we get access to this graph?
+GraphQL always starts with the so-called root node. This is the entry point from where you can move further along the relationships. In the query we say: “give me a user, and along with them their posts and the authors of those posts.” The server executes the instruction and returns exactly the part of the graph we asked for.
+
+We can take, for example, user 1, and get the data of their follower. Let’s write a GraphQL query snippet to show how to access it:
+<pre><code class="language-javascript">
+query {
+  user(id: "1") {
+    followers {
+      tweets {
+        content
+      }
+    }
+  }
+}
+</code></pre>
+Here we ask GraphQL to move through the graph from the root node, which is the user object with argument id: 1, and get access to the tweet content of the follower.
+
+That’s good for a start, but let’s now discuss what kinds of queries exist in GraphQL in more detail.
+
+<h2>Types of GraphQL queries</h2>
+The types of queries in GraphQL come down to three main ones:
+
+Query
+Mutation
+Subscription
+
+<h3>Query: queries in GraphQL</h3>
+We’ve already seen them briefly in our earlier examples.
+
+With Query, GraphQL retrieves the required data from the server. The Query type in GraphQL is analogous to GET in REST. Queries are strings sent in the body of an HTTP POST request.
+
+Note that all query types in GraphQL are sent via POST. But that’s if we talk about HTTP exchange, and that’s the most common option. However, GraphQL can also work over WebSockets, gRPC, and other transport protocols.
+
+We’ve already seen examples of Query, but let’s do another one to reinforce: let’s get the fname and age parameters of all users:
+<pre><code class="language-javascript">
+query {
+  users {
+    fname
+    age
+  }
+}
+</code></pre>
+The server responds with data in JSON format. The response structure matches the query structure:
+<pre><code class="language-javascript">
+data : {
+  users [
+    {
+      "fname": "Joe",
+      "age": 23
+    },
+    {
+      "fname": "Betty",
+      "age": 29
+    }
+  ]
+}
+</code></pre>
+The response comes as JSON with a data key and an errors key if there are any errors.
+
+Here’s an example response where an error occurred because Alice’s age had a string value:
+<pre><code class="language-javascript">
+{
+  "errors": [
+    {
+      "message": "Error: Field 'age' has invalid value 'test'.",
+      "locations": [
+        {
+          "line": 5,
+          "column": 5
+        }
+      ],
+      "path": ["users", 0, "age"]
+    }
+  ],
+  "data": {
+    "users": [
+      {
+        "fname": "Alice",
+        "age": "test"
+      },
+      {
+        "fname": "Bob",
+        "age": 32
+      }
+    ]
+  }
+}
+</code></pre>
+<h3>Mutation: mutations in GraphQL</h3>
+With mutations you can add data to the database. Mutation is analogous to POST and PUT in REST. Here’s a code example:
+<pre><code class="language-javascript">
+mutation createUser{
+  addUser(fname: "Richie", age: 22) {
+    id
+  }
+}
+</code></pre>
+Here a createUser mutation is created, which adds a user with fname Richie and age 22 to the DB. The server responds with JSON containing the record’s id. The response looks like this:
+<pre><code class="language-javascript">
+data : {
+  addUser : "a36e4h"
+}
+</code></pre>
+<h3>Subscription: subscriptions in GraphQL</h3>
+With subscriptions, the client listens to changes in the DB in real time. Under the hood, subscriptions use WebSockets. Example code:
+<pre><code class="language-javascript">
+subscription listenLikes {
+  listenLikes {
+    fname
+    likes
+  }
+}
+</code></pre>
+With this query you can, for example, receive a list of users with their names and the number of likes each time it changes.
+
+For example, when the user with fname Richie receives a like, the response will be:
+<pre><code class="language-javascript">
+data: {
+  listenLikes: {
+    "fname": "Richie",
+    "likes": 245
+  }
+}
+</code></pre>
+This type of query can be used to update the number of likes in real time in the corresponding interface, for example, in a voting results form on a website.
+
+<h3>Concepts in GraphQL queries</h3>
+We’ve looked at examples of different queries, but now let’s figure out how to name and organize the elements used in GraphQL.
+
+<h3>Concepts we will cover:</h3>
+Fields
+Arguments
+Aliases
+Fragments
+Variables
+Directives
+
+<h3>Fields</h3>
+Let’s look at a simple GraphQL query:
+<pre><code class="language-javascript">
+{
+  user {
+    name
+  }
+}
+</code></pre>
+In this query you see 2 fields. The field user returns an object that has another field of type String.
+
+We asked the GraphQL server to return a user object with its name, it’s simple, let’s move on.
+
+<h3>Arguments</h3>
+You can pass an argument to indicate which user we want to refer to.
+
+Example:
+<pre><code class="language-javascript">
+{
+  user(id: "1") {
+    name
+  }
+}
+</code></pre>
+We pass the user’s id, but we could also pass the argument name, assuming the API has a function that would return a response like that.
+
+We can also have an argument limit, indicating how many followers we want to return in the response.
+
+Example:
+<pre><code class="language-javascript">
+{
+  user(id: "1") {
+    name
+    followers(limit: 50)
+  }
+}
+</code></pre>
+
+<h3>Aliases</h3>
+Aliases in GraphQL are used to rename fields in the query response. This is useful when you want to fetch data from multiple fields with the same name but have them with different names in the response. Here’s an example GraphQL query using aliases:
+
+Example:
+<pre><code class="language-javascript">
+{
+  leftComparison: tweet(id: 1) {
+    ...comparisonFields
+  }
+  rightComparison: tweet(id: 2) {
+    ...comparisonFields
+  }
+}
+
+fragment comparisonFields on tweet {
+  userName
+  userHandle
+  date
+  body
+  repliesCount
+  likes
+}
+</code></pre>
+What happens in this query?
+
+We are sending two queries to get information about two different tweets: tweet with id 1 and tweet with id 2.
+
+For each query we create aliases: leftComparison and rightComparison.
+
+And we use the fragment comparisonFields, which contains a set of fields that we want to get for each tweet. Fragments allow us to avoid code duplication and reuse the same set of fields in several places of the query.
+
+Here is the response we will get:
+<pre><code class="language-javascript">
+{
+  "data": {
+    "leftComparison": {
+    userName: "foo",
+      userHandle: "@foo",
+      date: "2019-05-01",
+      body: "Life is good",
+      repliesCount: 10,
+      tweetsCount: 200,
+      likes: 500,
+    },
+    "rightComparison": {
+      userName: "boo",
+      userHandle: "@boo",
+      date: "2018-05-01",
+      body: "This blog is awesome",
+      repliesCount: 15,
+      tweetsCount: 500,
+      likes: 700
+    }
+}
+</code></pre>
+<h3>Variables</h3>
+GraphQL variables are a way to dynamically pass a value that is used in a query. As you saw above, we passed arguments inside the query string. We will pass arguments through a variable.
+
+In the example we added the user identifier id as a string in the query:
+<pre><code class="language-javascript">
+{
+  accholder: user(id: "1") {
+    fullname: name
+  }
+}
+</code></pre>
+Let’s add a variable and replace the static value. The same can be written as:
+<pre><code class="language-javascript">
+query GetAccHolder($id: String) {
+  accholder: user(id: $id) {
+    fullname: name
+  }
+}
+
+{
+  "id": "1"
+}
+</code></pre>
+Here GetAccHolder is a named function. It is convenient to use it when you have many queries in one application.
+
+We declared the variable $id with the type String. Then everything is the same as in our initial query, but instead of a fixed id we pass the variable $id.
+The values of variables are passed in a separate block. In our case id = 1.
+
+You can set a default value:
+<pre><code class="language-javascript">
+query GetAccHolder($id: String = "1") {
+  accholder: user(id: $id) {
+   fullname: name
+  }
+}
+</code></pre>
+Or make the variable required by adding ! to the type:
+<pre><code class="language-javascript">
+query GetAccHolder($id: String!) {
+  accholder: user(id: $id) {
+    fullname: name
+  }
+}
+</code></pre>
+<h3>Directives</h3>
+Let’s see how we can dynamically change the query structure using directives.
+
+Directives help to dynamically change the structure and form of queries with variables.
+
+<b>@include and @skip</b> – two directives available in GraphQL
+Example:
+
+@include(if: Boolean) — include the field if the variable = true
+<pre><code class="language-javascript">
+query GetFollowers($id: String) {
+  user(id: $id) {
+    fullname: name,
+    followers @include(if: $getFollowers) {
+      name
+      userHandle
+      tweets
+    }
+  }
+}
+
+{
+  "id": "1",
+  "$getFollowers": false
+}
+</code></pre>
+Here $getFollowers = false, so the followers field will not be included in the response.
+
+@skip(if: Boolean) — skip the field if the variable = true
+<pre><code class="language-javascript">
+query GetFollowers($id: String) {
+  user(id: $id) {
+    fullname: name,
+    followers @skip(if: $getFollowers) {
+      name
+      userHandle
+      tweets
+    }
+  }
+}
+
+{
+"id": "1",
+"$getFollowers": true
+}
+</code></pre>
+Here $getFollowers = true, so the followers field will be skipped, i.e. excluded from the response.
+<h3>GraphQL Schema</h3>
+To work with GraphQL on the server, you need to deploy a GraphQL schema, which describes the API logic, types and data structure. The schema consists of two objects: TypeDefs and Resolvers.
+
+Above we saw the main GraphQL types. They must be defined so that the server can work with them. The typeDef object defines the list of types in the project. Example:
+<pre><code class="language-javascript">
+const typeDefs= gql`
+  type User {
+    id: Int
+    fname: String
+    age: Int
+    likes: Int
+    posts: [Post]
+  }
+
+  type Post {
+    id: Int
+    user: User
+    body: String
+  }
+
+  type Query {
+    users(id: Int!): User!
+    posts(id: Int!): Post!
+  }
+  type Mutation {
+    incrementLike(fname: String!) : [User!]
+  }
+
+  type Subscription {
+    listenLikes : [User]
+  }
+`;
+</code></pre>
+In the example the User type is defined with fields fname, age, likes, etc. Each field has a type: String or Int. GraphQL supports 4 types: String, Int, Float, Boolean. A field with ! is required.
+
+Also defined are the types Query, Mutation and Subscription.
+
+Query users accepts id and returns a user. Query posts — similarly for posts.
+
+Mutation incrementLike accepts fname and returns a list of users.
+
+Subscription listenLikes returns a list of users.
+
+After defining the types we need to add their logic. This is done through Resolvers.
+
+A Resolver is a function that returns data for a field. They can be asynchronous and fetch data from a REST API, a database, or another source.
+
+Example:
+<pre><code class="language-javascript">
+const resolvers= {
+  Query: {
+    users(root, args) {return users.filter(user=> user.id=== args.id)[0] },
+    posts(root, args) {return posts.filter(post=> post.id=== args.id)[0] }
+  },
+
+  User: {
+    posts: (user)=> {
+      return posts.filter(post=> post.userId=== user.id)
+    }
+  },
+
+  Post: {
+    user: (post)=> {
+      return users.filter(user=> user.id=== post.userId)[0]
+    }
+  },
+  Mutation: {
+    incrementLike(parent, args) {
+      users.map((user)=> {
+        if(user.fname=== args.fname) user.likes++
+        return user
+      })
+      pubsub.publish('LIKES', {listenLikes: users});
+      return users
+    }
+  },
+  Subscription: {
+    listenLikes: {
+      subscribe: ()=> pubsub.asyncIterator(['LIKES'])
+    }
+  }
+};
+</code></pre>
+In the example there are 6 functions:
+
+query users returns the user with the passed id;
+
+query posts returns the post with the passed id;
+
+User.posts returns the list of posts of the user;
+
+Post.user returns the author of the post;
+
+mutation incrementLike increases likes for the user with fname, publishes changes via pubsub;
+
+subscription listenLikes listens to LIKES and responds on update.
+
+Pubsub is a system of real-time information transfer through websockets. It is convenient because everything related to websockets is put into separate abstractions.
+
+<h2>Why GraphQL is conceptually good</h2>
+<b>Flexibility</b>. GraphQL does not limit the types of queries. It can be used both for CRUD operations (create, read, update, delete) and for complex queries.
+
+<b>Schema definition</b>. GraphQL automatically creates an API schema. Code hierarchy and object relations reduce complexity.
+
+<b>Optimization</b>. GraphQL allows clients to request only the data they need. This reduces response time and the amount of data transmitted.
+
+<b>Context</b>. GraphQL takes into account all the details of queries and responses, which allows you to focus on business logic. Strictly typed fields warn of errors even before execution.
+
+<b>Extensibility</b>. GraphQL allows you to extend the API schema and add new data types. You can reuse existing code and data sources to avoid redundancy.

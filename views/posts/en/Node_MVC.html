@@ -1,0 +1,147 @@
+<h2>What is MVC</h2>
+MVC (Model-View-Controller) is an architectural pattern that separates a project into three layers:
+Model — responsible for working with data (for example, a MySQL database).
+View — what the user sees (HTML, CSS, JS).
+Controller — a mediator between the model and the view, handles requests, calls the necessary models, and passes the result to the View.
+
+This approach makes the code:
+- more readable,
+- easier to maintain,
+- more flexible for expansion.
+
+Basic project structure
+<pre><code class="language-javascript">
+myapp/
+│
+├── app.js             # Entry point (Express server)
+├── routes/            # Routes
+│   └── index.js
+├── controllers/       # Controllers
+│   └── postController.js
+├── models/            # Models
+│   └── postModel.js
+├── views/             # Views (templates or static)
+│   └── posts.ejs
+└── public/
+│   └── img
+│   └── js
+│   └── css
+└── package.json
+</code></pre>
+
+<h3>Step 1. Setting up the server</h3>
+app.js
+<pre><code class="language-javascript">
+const express = require('express');
+const app = express();
+const routes = require('./routes/index');
+
+app.set('view engine', 'ejs'); // can use ejs/pug/handlebars
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+// Connect routes
+app.use('/', routes);
+
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Server started on http://localhost:${PORT}`));
+</code></pre>
+<h3>Step 2. Routes</h3>
+routes/index.js
+<pre><code class="language-javascript">
+const express = require('express');
+const router = express.Router();
+const postController = require('../controllers/postController');
+
+// list of posts
+router.get('/posts', postController.list);
+
+// single post
+router.get('/posts/:id', postController.details);
+
+// create new post (example POST request)
+router.post('/posts', postController.create);
+
+module.exports = router;
+</code></pre>
+<h3>Step 3. Controllers</h3>
+controllers/postController.js
+<pre><code class="language-javascript">
+const Post = require('../models/postModel');
+
+exports.list = async (req, res) => {
+const posts = await Post.getAll();
+res.render('posts', { posts });
+};
+
+exports.details = async (req, res) => {
+const post = await Post.getById(req.params.id);
+if (!post) return res.status(404).send('Not found');
+res.json(post);
+};
+
+exports.create = async (req, res) => {
+const { title, content } = req.body;
+await Post.create(title, content);
+res.redirect('/posts');
+};
+</code></pre>
+<h3>Step 4. Models</h3>
+models/postModel.js
+<pre><code class="language-javascript">
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+host: 'localhost',
+user: 'root',
+database: 'mvc_test'
+});
+
+exports.getAll = async () => {
+const [rows] = await pool.query('SELECT * FROM posts ORDER BY created_at DESC');
+return rows;
+};
+
+exports.getById = async (id) => {
+const [rows] = await pool.query('SELECT * FROM posts WHERE id = ?', [id]);
+return rows[0];
+};
+
+exports.create = async (title, content) => {
+await pool.query('INSERT INTO posts (title, content, created_at) VALUES (?, ?, UNIX_TIMESTAMP())', [title, content]);
+};
+</code></pre>
+<h3>Step 5. Views</h3>
+views/posts.ejs
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Posts</title>
+</head>
+<body>
+<h1>List of posts</h1>
+<ul>
+    <% posts.forEach(p => { %>
+        <li><b><%= p.title %></b> — <%= p.content %></li>
+    <% }) %>
+</ul>
+
+<form action="/posts" method="POST">
+    <input type="text" name="title" placeholder="Title">
+    <textarea name="content" placeholder="Content"></textarea>
+    <button type="submit">Add</button>
+</form>
+</body>
+</html>
+</code></pre>
+<h3>Conclusion</h3>
+We have a classic MVC application on Node.js:
+Model (postModel) works with the database.
+Controller (postController) handles requests and calls the model.
+View (EJS) displays data.
+Router manages routes.
+app.js ties everything together.
+
+👉 With this approach, it's easy to build news sites, blogs, shops, chats — any CRUD application.

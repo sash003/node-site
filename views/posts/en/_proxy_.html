@@ -1,0 +1,140 @@
+
+First, we go to the server console via SSH:
+<pre><code class="language-javascript">
+ssh root@176.214.14.203 // server ip
+Enter the password and get into the server OS
+</code></pre>
+What do we need here next? Check if Node.js is installed and if not, install it.
+<pre><code class="language-javascript">
+node -v // if it shows, then node is installed. If not
+//Add a repository for a stable version (for example, 20.x):
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+//Install Node.js (npm is installed automatically):
+sudo apt install -y nodejs
+//Check installation
+node -v
+npm -v
+//Node.js and npm versions should appear
+//Install PM2 to manage node processes
+sudo npm install -g pm2
+</code></pre>
+Now let's launch our node application. My entry point is app.js
+For a production server, do not launch via "node app.js" directly, otherwise the process will die when SSH is closed. We use pm2:
+<pre><code class="language-javascript">
+pm2 start app.js --name "nodesite"
+pm2 save
+pm2 startup //This will allow the application to run continuously.
+</code></pre>
+A nice sign should appear where online will be lit green)
+
+Requests to a domain or subdomain go to nginx port 80 as standard. You need to redirect them to Node.js. At first I tried to do this through the domain config files, it didn't work, I had to get into the global nginx config. Open the standard nano program again. In Ubuntu, the global Nginx config is usually located at: /etc/nginx/nginx.conf. To open and edit it:
+<pre><code class="language-javascript">
+sudo nano /etc/nginx/nginx.conf
+or via vim:
+sudo vim /etc/nginx/nginx.conf
+</code></pre>
+Here's what it was for my subdomain:
+<pre><code class="language-javascript">
+server {
+  server_name node.waytohome.in.net www.node.waytohome.in.net;
+  listen 176.114.14.200;
+  disable_symlinks if_not_owner from=$root_path;
+  set $root_path /var/www/sash30038383/data/www/node.waytohome.in.net;
+  location ~* ^.+\.(jpg|jpeg|gif|png|svg|js|css|mp3|ogg|mpe?g|avi|zip|gz|bz2?|rar|swf)$ {
+    root $root_path;
+    access_log /var/www/nginx-logs/sash30038383 isp;
+    access_log /var/www/httpd-logs/node.waytohome.in.net.access.log ;
+    error_page 404 = @fallback;
+  }
+  location/{
+    proxy_pass http://176.114.14.200:81;
+    proxy_redirect http://176.114.14.200:81/ /;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+  location ~* ^/(webstat|awstats|webmail|myadmin|pgadmin)/ {
+    //and then the settings blocks for server
+  }
+}
+</code></pre>
+Replaced this entire block with
+<pre><code class="language-javascript">
+server {
+    listen 176.114.14.200:80;
+    server_name node.waytohome.in.net www.node.waytohome.in.net;
+
+    root /var/www/sash30038383/data/www/node.waytohome.in.net/public;
+    index index.html index.htm;
+
+    location / {
+        proxy_pass http://127.0.0.1:4320;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    include /usr/local/ispmgr/etc/nginx.inc;
+}
+</code></pre>
+After that, you need to restart nginx, our node is running and listening to the specified port (mine is 4320)
+<pre><code class="language-javascript">
+sudo nginx -t # Configuration check
+sudo systemctl reload nginx //or
+sudo systemctl restart nginx
+</code></pre>
+After that, everything opened for me, God willing, it will work for you too 😊🤝
+
+Now let's make a combat PM2 config that can be used either in testing or in production. Create a file ecosystem.config.js in the root of the project:
+<pre><code class="language-javascript">
+module.exports = {
+  apps: [
+    {
+      name: "myapp",              // имя приложения (любое)
+      script: "app.js",           // точка входа (или server.js)
+      instances: 1,               // количество процессов (1 = обычный режим)
+      autorestart: true,          // авто-ребут при падении
+      watch: true,               // следить за файлами (лучше false на проде)
+      watch_delay: 1000, // задержка чтобы не дергался постоянно
+      max_memory_restart: "300M", // перезапуск если >300МБ памяти
+      max_memory_restart: "300M", // перезапуск если >300МБ памяти
+      env: {
+      NODE_ENV: "development",  // переменные окружения для dev
+    },
+    env_production: {
+      NODE_ENV: "production"    // переменные окружения для prod
+    },
+      error_file: "./logs/err.log",  // ошибки
+      out_file: "./logs/out.log",    // обычные логи
+      log_date_format: "YYYY-MM-DD HH:mm:ss"
+    }
+  ]
+};
+</code></pre>
+Control commands:
+
+pm2 start ecosystem.config.js --env production --watch # start
+
+🔸 If it complains, run via npx. Then PowerShell doesn't touch .ps1:
+
+npx pm2 start ecosystem.config.js --env production --watch
+npx pm2 restart myapp # restart
+npx pm2 stop myapp # stop
+npx pm2 delete myapp # delete
+npx pm2 logs myapp # watch logs
+npx pm2 monit # monitoring in console
+
+Saving state (so that after server reboot everything starts)
+pm2 save
+pm2 startup
+
+📦 As a result, we will have:
+Constant operation of Node.js
+Auto-restart in case of failure or memory leak
+Beautiful logs in ./logs/
+Ability to easily update via one command

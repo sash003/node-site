@@ -1,0 +1,31 @@
+
+Node.js is a JavaScript runtime environment on the server. If earlier JS was used only in the browser to animate interfaces, then with the advent of Node it can be run on the server. But the main feature of Node.js is <strong>asynchronicity</strong> and <strong>event loop</strong>, which allow you to process thousands of requests simultaneously without huge resource costs.
+<h2>🔹Asynchrony and event loop</h2>
+In traditional languages like PHP or Python, the server processes requests synchronously - one after another. Imagine that the server needs to read a file from disk. Until the file is read, the next request is waiting.
+Node.js works differently: any "long" operation (reading a file, a database request, an HTTP request) is performed asynchronously. The server immediately takes the next tasks, and when the result is ready, the event returns to the loop and is processed.
+<h2>🔹Comparison of work</h2>
+<h3>🔸Synchronous language (PHP/Python by default)</h3>
+<pre class="grey">
+[Request 1] → | Reading file... | → Reply to client
+(other requests are waiting)
+</pre>
+All requests are processed in turn. If one takes a long time to think, all the others are idle.
+<h2>🔹Asynchronous Node.js (event loop)</h2>
+<pre class="grey">
+[Request 1] → Read file (asynchronous) ─┐
+[Request 2] → Query DB (asynchronous) ─┼─> Event Loop → Responses when ready
+[Request 3] → Serve static file ──┘
+</pre>
+Node.js processes requests <strong>when ready</strong>, without blocking others.
+<h2>🔹How is Node.js different from PHP and Python?</h2>
+<strong>PHP</strong>: creates a new process for each request (via Apache/Nginx). Easy to write, but hard to handle under high load.
+<strong>Python</strong>: synchronous by default, but there are asynchronous frameworks (FastAPI, aiohttp).
+<strong>Node.js</strong>: asynchronous built-in "out of the box". No blocking - means you can hold tens of thousands of connections on one server.
+<h2>🔹Where is Node.js especially good?</h2>
+Chats, messengers, streams (WebSocket, real-time).
+Single-page applications (SPA) with API on the backend.
+Microservices and REST API.
+Game servers.
+<h2>🔹Result</h2>
+Node.js is not "better or worse" than PHP/Python, but <strong>a different approach</strong>.
+If you have a project with a high load, a large number of simultaneous connections and an emphasis on speed, Node.js will be a great choice.

@@ -1,0 +1,38 @@
+<%- include(`pages/${lang}/header`) %>
+
+<main>
+    <div id="main">
+        <div id="post">
+            <h1 class="postH1"><%= title %></h1>
+            <div class="article-text"><%- content %></div>
+            <br>
+            <br>
+            <div id="comments-wrap">
+                <h3>Комментарии</h3>
+
+                <div class="forLightBox"><%- comments %></div>
+
+                <form class="comment-form" enctype="multipart/form-data" data-slug="<%= slug %>">
+                    <input type="text" name="name" placeholder="Ваше имя" class="comment-name" required>
+
+                    <textarea name="comment" placeholder="Ваш комментарий..." class="comment-text" required></textarea>
+
+                    <div class="comment-controls">
+                        <!-- Скрытый input file -->
+                        <label class="file-label">
+                            Выбрать файл
+                            <input type="file" name="files[]" class="file-input" multiple>
+                        </label>
+
+                        <button type="submit" class="comment-btn">
+                            <img src="/img/button2.png" alt="Отправить">
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</main>
+
+
+<%- include(`pages/${lang}/footer`) %>

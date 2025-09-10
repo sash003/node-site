@@ -1,0 +1,139 @@
+
+WebSocket дозволяє створювати програми в реальному часі - чати, ігри, повідомлення. На відміну від звичайних HTTP-запитів, з'єднання постійно підтримується, і сервер може сам відправляти дані клієнту. У цій статті зробимо чат із кімнатами на Node.js та бібліотеці socket.io
+<h2>Установка</h2>
+Створюємо папку проекту та встановлюємо залежності
+<pre><code class="language-bash">
+mkdir websocket-chat
+cd websocket-chat
+npm init -y
+npm install express socket.io
+</code></pre>
+<h2>Сервер Node.js</h2>
+Створимо файл server.js та підключимо Express та socket.io
+<pre><code class="language-javascript">
+const express = require('express');
+const http = require ('http');
+const {Server} = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = новий Server (server);
+
+// роздаємо статику з папки public
+app.use(express.static('public'));
+
+io.on('connection', (socket) => {
+  cconsole.log('Новий користувач підключився:', socket.id); // Користувач входить до кімнати
+  socket.on('joinRoom', (room, username) => {
+    socket.join(room);
+    socket.username = username;
+    socket.room = room;
+    console.log(`${username} війшов до кімнати ${room}`);
+
+    // Повідомлення тільки для цієї кімнати
+    io.to(room).emit('message', {
+      user: 'System',
+      text: `${username} приєднався до кімнати ${room}`
+    });
+  });
+
+  // обробка вхідних повідомлень
+  socket.on('chatMessage', (msg) => {
+    io.to(socket.room).emit('message', {
+      user: socket.username,
+      text: msg
+    });
+  });
+
+  // відключення
+  socket.on('disconnect', () => {
+    if(socket.username && socket.room){
+      io.to(socket.room).emit('message', {
+        user: 'System',
+        text: `${socket.username} залишив кімнату`
+      });
+    }
+  });
+});
+
+server.listen(3000, () => {
+  console.log('Сервер запущений на http://localhost:3000');
+});
+</code></pre>
+<h2>Фронтенд</h2>
+У папці public створимо index.html. Тут форма для вибору імені та кімнати, а також сам чат
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Chat</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #222; color: #eee; }
+    #chat { display:none; }
+    #messages { border:1px solid #555; height:300px; overflow-y:scroll; padding:5px; margin-bottom:10px; }
+    #messages div { margin: 3px 0; }
+    #login { margin-bottom:20px; }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <input id="username" placeholder="Ваше ім'я">
+    <input id="room" placeholder="Кімната">
+    <button id="join">Войти</button>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input id="msg" placeholder="Повідомлення">
+    <button id="send">Відправити</button>
+  </div>
+
+  <script src="chat.js"></script>
+</body>
+</html>
+</code></pre>
+<h2>Клієнтський скрипт</h2>
+Створюємо public/chat.js та пишемо логіку роботи клієнта
+<pre><code class="language-javascript">
+$(function(){
+  const socket = io();
+
+  $('#join').click(function(){
+    const username = $('#username').val();
+    const room = $('#room').val();
+    if(username && room){
+      socket.emit('joinRoom', room, username);
+      $('#login').hide();
+      $('#chat').show();
+    }
+  });
+
+  $('#send').click(function(){
+    const msg = $('#msg').val();
+    if(msg){
+      socket.emit('chatMessage', msg);
+      $('#msg').val('');
+    }
+  });
+
+  socket.on('message', function(data){
+    $('#messages').append('&lt;div&gt;&lt;b&gt;' + data.user + ':&lt;/b&gt; ' + data.text + '&lt;/div&gt;');
+    $('#messages').scrollTop($('#messages')[0].scrollHeight);
+  });
+});
+</code></pre>
+<h2>Функції socket.io</h2>
+Основні події та можливості
+<ul>
+  <li><b>connection</b> – спрацьовує при підключенні клієнта</li>
+  <li><b>disconnect</b> – при вимкненні</li>
+  <li><b>socket.join(room)</b> – вхід до кімнати</li>
+  <li><b>io.to(room).emit()</b> – надсилання повідомлення всім у кімнаті</li>
+  <li><b>socket.emit()</b> – повідомлення конкретного користувача</li>
+  <li><b>socket.broadcast.emit()</b> – повідомлення всім окрім відправника</li>
+</ul>
+<h2>Висновок</h2>
+Ми зробили чат на Node.js з кімнатами, входом на ім'я та реальними повідомленнями. Socket.io полегшує роботу з WebSocket і дозволяє будувати складні системи - чати, повідомлення, ігри. Можна додати авторизацію, зберігання історії в базі та багато іншого

@@ -1,0 +1,329 @@
+<h2>About the Article</h2>
+We will connect three popular databases to Node.js: MySQL, PostgreSQL, and MongoDB.
+We will go through driver installation, connection, basic queries, and a full CRUD example for the <em>books</em> entity on Express.
+At the end — tips on performance and security.
+<h2>Prerequisites</h2>
+Node.js 18+, npm, a running database server (or cloud instance), basic knowledge of JavaScript and SQL.
+<h2>Installing Dependencies</h2>
+<pre><code class="language-javascript">
+// MySQL
+npm i mysql2 dotenv express
+
+// PostgreSQL
+npm i pg dotenv express
+
+// MongoDB (via Mongoose)
+npm i mongoose dotenv express
+
+// For development convenience
+npm i -D nodemon
+</code></pre>
+<h2>Project Structure</h2>
+<pre><code class="language-javascript">.
+├─ .env
+├─ app.js
+├─ db
+│  ├─ mysql.js
+│  ├─ postgres.js
+│  └─ mongo.js
+└─ models
+   └─ book.mongo.model.js
+</code></pre>
+<h2>.env Example</h2>
+<pre><code class="language-javascript">
+# General
+PORT=3000
+
+# MySQL
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=pass
+MYSQL_DATABASE=app_db
+
+# PostgreSQL
+PG_HOST=127.0.0.1
+PG_PORT=5432
+PG_USER=postgres
+PG_PASSWORD=pass
+PG_DATABASE=app_db
+
+# MongoDB
+MONGO_URI=mongodb://127.0.0.1:27017/app_db
+</code></pre>
+<h2>Connecting to MySQL</h2>
+<pre><code class="language-javascript">
+// db/mysql.js
+require('dotenv').config();
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST,
+  port: +process.env.MYSQL_PORT,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10
+});
+
+module.exports = { pool };
+</code></pre>
+<h3>Initializing MySQL Table</h3>
+<pre><code class="language-javascript">
+CREATE TABLE IF NOT EXISTS books (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  author VARCHAR(255) NOT NULL,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+</code></pre>
+<h2>Connecting to PostgreSQL</h2>
+<pre><code class="language-javascript">
+// db/postgres.js
+require('dotenv').config();
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: process.env.PG_HOST,
+  port: +process.env.PG_PORT,
+  user: process.env.PG_USER,
+  password: process.env.PG_PASSWORD,
+  database: process.env.PG_DATABASE,
+  max: 10
+});
+
+module.exports = { pool };
+</code></pre>
+<h3>Initializing PostgreSQL Table</h3>
+<pre><code class="language-javascript">
+CREATE TABLE IF NOT EXISTS books (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  author TEXT NOT NULL,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+</code></pre>
+<h2>Connecting to MongoDB</h2>
+<pre><code class="language-javascript">
+// db/mongo.js
+require('dotenv').config();
+const mongoose = require('mongoose');
+
+async function connectMongo() {
+  mongoose.set('strictQuery', true);
+  await mongoose.connect(process.env.MONGO_URI);
+  return mongoose.connection;
+}
+
+module.exports = { connectMongo };
+</code></pre>
+<h3>Book Model for MongoDB</h3>
+<pre><code class="language-javascript">
+// models/book.mongo.model.js
+const mongoose = require('mongoose');
+
+const BookSchema = new mongoose.Schema({
+  title: { type: String, required: true, index: true },
+  author: { type: String, required: true },
+  price: { type: Number, default: 0 }
+}, { timestamps: true });
+
+module.exports = mongoose.model('Book', BookSchema);
+</code></pre>
+<h2>Express Application</h2>
+<pre><code class="language-javascript">
+// app.js
+require('dotenv').config();
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+// Connect required routes
+// const mysqlRoutes = require('./routes/books.mysql');
+// const pgRoutes = require('./routes/books.pg');
+// const mongoRoutes = require('./routes/books.mongo');
+
+// app.use('/api/books', mysqlRoutes);
+// app.use('/api/books', pgRoutes);
+// app.use('/api/books', mongoRoutes);
+
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log("Server on http://localhost:" + port));
+</code></pre>
+<h2>CRUD for MySQL</h2>
+<pre><code class="language-javascript">
+// routes/books.mysql.js
+const { Router } = require('express');
+const { pool } = require('../db/mysql');
+const r = Router();
+
+r.post('/', async (req, res) => {
+  const { title, author, price } = req.body;
+  const [result] = await pool.execute(
+    'INSERT INTO books (title, author, price) VALUES (?, ?, ?)',
+    [title, author, price ?? 0]
+  );
+  res.status(201).json({ id: result.insertId, title, author, price: +price || 0 });
+});
+
+r.get('/', async (_req, res) => {
+  const [rows] = await pool.query('SELECT * FROM books ORDER BY id DESC');
+  res.json(rows);
+});
+
+r.get('/:id', async (req, res) => {
+  const [rows] = await pool.execute('SELECT * FROM books WHERE id=?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.put('/:id', async (req, res) => {
+  const { title, author, price } = req.body;
+  const [result] = await pool.execute(
+    'UPDATE books SET title=?, author=?, price=? WHERE id=?',
+    [title, author, price ?? 0, req.params.id]
+  );
+  if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
+  res.json({ id: +req.params.id, title, author, price: +price || 0 });
+});
+
+r.delete('/:id', async (req, res) => {
+  const [result] = await pool.execute('DELETE FROM books WHERE id=?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>CRUD for PostgreSQL</h2>
+<pre><code class="language-javascript">
+// routes/books.pg.js
+const { Router } = require('express');
+const { pool } = require('../db/postgres');
+const r = Router();
+
+r.post('/', async (req, res) => {
+  const { title, author, price } = req.body;
+  const { rows } = await pool.query(
+    'INSERT INTO books (title, author, price) VALUES ($1,$2,$3) RETURNING *',
+    [title, author, price ?? 0]
+  );
+  res.status(201).json(rows[0]);
+});
+
+r.get('/', async (_req, res) => {
+  const { rows } = await pool.query('SELECT * FROM books ORDER BY id DESC');
+  res.json(rows);
+});
+
+r.get('/:id', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM books WHERE id=$1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.put('/:id', async (req, res) => {
+  const { title, author, price } = req.body;
+  const { rowCount, rows } = await pool.query(
+    'UPDATE books SET title=$1, author=$2, price=$3 WHERE id=$4 RETURNING *',
+    [title, author, price ?? 0, req.params.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.delete('/:id', async (req, res) => {
+  const { rowCount } = await pool.query('DELETE FROM books WHERE id=$1', [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>CRUD for MongoDB</h2>
+<pre><code class="language-javascript">
+// routes/books.mongo.js
+const { Router } = require('express');
+const { connectMongo } = require('../db/mongo');
+const Book = require('../models/book.mongo.model');
+const r = Router();
+
+let ready = false;
+r.use(async (_req, _res, next) => {
+  if (!ready) { await connectMongo(); ready = true; }
+  next();
+});
+
+r.post('/', async (req, res) => {
+  const doc = await Book.create({ title: req.body.title, author: req.body.author, price: req.body.price ?? 0 });
+  res.status(201).json(doc);
+});
+
+r.get('/', async (_req, res) => {
+  const list = await Book.find().sort({ _id: -1 }).lean();
+  res.json(list);
+});
+
+r.get('/:id', async (req, res) => {
+  const doc = await Book.findById(req.params.id).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json(doc);
+});
+
+r.put('/:id', async (req, res) => {
+  const doc = await Book.findByIdAndUpdate(
+    req.params.id,
+    { title: req.body.title, author: req.body.author, price: req.body.price ?? 0 },
+    { new: true, runValidators: true }
+  ).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json(doc);
+});
+
+r.delete('/:id', async (req, res) => {
+  const doc = await Book.findByIdAndDelete(req.params.id).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>CRUD testing</h2>
+<pre><code class="language-javascript">
+// CREATE
+curl -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Bhagavad-gita","author":"Vyasa","price":10.5}'
+
+// READ ALL
+curl http://localhost:3000/api/books
+
+// READ ONE
+curl http://localhost:3000/api/books/1
+
+// UPDATE
+curl -X PUT http://localhost:3000/api/books/1 -H "Content-Type: application/json" -d '{"title":"Gita","author":"Vyasa","price":12}'
+
+// DELETE
+curl -X DELETE http://localhost:3000/api/books/1
+</code></pre>
+<h2>Security and Performance Recommendations</h2>
+1. Use parameterized queries (placeholders `?`, `$1`) — this protects against SQL injections.
+2. Never store passwords or keys in code — only in `.env`.
+3. Limit connection pool (`connectionLimit`, `max`).
+4. Implement pagination (`LIMIT/OFFSET` or `skip/limit` in MongoDB).
+5. Add indexes on frequently filtered fields (`title`, `author`).
+6. Log errors (e.g., `pino`, `morgan`).
+7. Perform regular database backups.
+8. Use caching for heavy queries (Redis).
+9. Enable monitoring (Prometheus, APM).
+10. Update dependencies (`npm audit`, `snyk`).
+<h2>Conclusion</h2>
+We connected MySQL, PostgreSQL, and MongoDB to Node.js, created tables/schema, and implemented full CRUD on Express.
+Choose the stack according to the task:
+- MySQL/PostgreSQL — strict schema and SQL.
+- MongoDB — flexibility and faster development.

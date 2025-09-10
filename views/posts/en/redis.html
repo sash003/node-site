@@ -1,0 +1,270 @@
+Redis is a fast key-value database that lives in memory (RAM) rather than on disk. Because of this, read and write operations are very fast, in milliseconds.
+<h2>🔹 Main Use Cases for Redis:</h2>
+<h3>Caching</h3>
+You store frequently requested data (e.g., results of complex SQL queries) in Redis so that the database is not loaded every time.
+Example: a product catalog website → product data is cached for 5 minutes instead of being read from MySQL on each request.
+
+<h3>Counters and Metrics</h3>
+You can count likes, video views, clicks, etc.
+
+<h3>User Sessions</h3>
+Storing login data, shopping cart, tokens.
+Often used with Node.js and Express instead of regular cookies.
+
+<h3>Queues and Pub/Sub</h3>
+Redis can work as a message broker.
+Example: real-time chat or notification system.
+
+<h3>Temporary Data Storage</h3>
+For example, one-time tokens, OTPs, temporary email verification links.
+
+<h3>Data Structures</h3>
+Redis supports not only strings but also lists, sets, sorted sets, and hashes.
+You can implement leaderboards, news feeds, and ranking-based games.
+
+<h3>Real-life Example:</h3>
+You visit a website, it checks your IP and shows: “You have visited 5 times already.” The counter is stored in Redis — a millisecond operation, the database is not overloaded, and data is not lost on server restart (if persistence is configured).
+<h2>Using Redis in High-Load Projects</h2>
+<h3>1. Architectural Scenarios</h3>
+Redis is most often used where speed of data access and low latency are critical:
+<ul><li><strong>Data Caching</strong><br>
+  Reduces database load. Example: caching results of complex SQL queries or API calls.</li>
+  <li><strong>User Sessions</strong><br>
+    Redis allows storing sessions in memory with TTL (time-to-live), speeding up authentication and scaling across multiple servers.</li>
+  <li><strong>Task Queues (Message Queues)</strong><br>
+    Using List and Pub/Sub data structures, you can organize task queues or notifications.</li>
+  <li><strong>Rate-limiting</strong><br>
+    Redis is perfect for counting requests by IP or token and limiting API load.</li>
+  <li><strong>Geospatial Data</strong><br>
+    Geo structures allow fast storage and search of objects by coordinates (e.g., nearest drivers in a taxi app).</li></ul>
+<h3>2. Choosing a Data Structure</h3>
+<table border="1" cellpadding="5" cellspacing="0">
+  <thead>
+  <tr>
+    <th>Type</th>
+    <th>Usage</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>String</td>
+    <td>JSON caching, counters, TTL sessions</td>
+  </tr>
+  <tr>
+    <td>List</td>
+    <td>Queues, event feeds</td>
+  </tr>
+  <tr>
+    <td>Set / Sorted Set</td>
+    <td>Unique elements, rankings, leaderboards</td>
+  </tr>
+  <tr>
+    <td>Hash</td>
+    <td>Objects with fields, e.g., user data</td>
+  </tr>
+  <tr>
+    <td>HyperLogLog</td>
+    <td>Approximate counting of unique elements (traffic analysis)</td>
+  </tr>
+  <tr>
+    <td>Bitmap</td>
+    <td>Fast flags and checks (e.g., fraud monitoring)</td>
+  </tr>
+  </tbody>
+</table>
+<h3>3. Using Redis in Node.js</h3>
+To work with Redis in Node.js, you can use the <code>ioredis</code> package:
+<pre><code class="language-bash">
+npm install ioredis
+</code></pre>
+<pre><code class="language-javascript">
+// Connecting to Redis
+const Redis = require('ioredis');
+const redis = new Redis({
+  host: '127.0.0.1',
+  port: 6379,
+});
+
+// ===== 1. Data Caching =====
+
+async function getUserData(userId) {
+  const cacheKey = `user:${userId}`;
+
+  // Check the cache
+  let user = await redis.get(cacheKey);
+  if (user) {
+    return JSON.parse(user);
+  }
+
+  // If not in cache, fetch from DB (example)
+  user = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
+
+  // Store in Redis for 1 hour
+  await redis.set(cacheKey, JSON.stringify(user), 'EX', 3600);
+
+  return user;
+}
+
+// ===== 2. Task Queues =====
+
+// Function to add a task to the queue
+async function addJob(queue, job) {
+  // queue - name of the queue in Redis
+  // job - task data object
+  // JSON.stringify converts the object to a string for Redis storage
+  // lpush adds the element to the start of the List in Redis
+  await redis.lpush(queue, JSON.stringify(job));
+}
+
+// Function to process tasks from the queue
+async function processJob(queue) {
+  // rpop retrieves and removes an element from the end of the List
+  const job = await redis.rpop(queue);
+  if (job) {
+    // Convert the string back to an object
+    const data = JSON.parse(job);
+    console.log('Processing job:', data);
+    // Here you can process the task, e.g., send an email
+  }
+}
+
+// ===== 3. Rate-limiting =====
+async function checkRateLimit(userId) {
+  // Key for a user or token
+  const key = `rate:${userId}`;
+
+  // Increment the counter by 1
+  const requests = await redis.incr(key);
+
+  // If it's the first request, set TTL to 60 seconds
+  if (requests === 1) {
+    await redis.expire(key, 60);
+  }
+
+  // If requests exceed 100 per minute, throw an error
+  if (requests > 100) {
+    throw new Error('Rate limit exceeded');
+  }
+}
+
+// ===== 4. Pub/Sub for Notifications =====
+
+// Function to send notifications to a channel
+async function sendNotification(channel, message) {
+  // Convert the message object to a string and publish to the channel
+  await redis.publish(channel, JSON.stringify(message));
+}
+
+// Subscriber for the notification channel
+const subscriber = new Redis();
+
+// Subscribe to the 'notifications' channel
+subscriber.subscribe('notifications', (err, count) => {
+  if (!err) console.log(`Subscribed to ${count} channel(s)`);
+});
+
+// Handle incoming messages
+subscriber.on('message', (channel, message) => {
+  // Convert the string back to an object and log it
+  console.log(`Received message from ${channel}:`, JSON.parse(message));
+});
+
+</code></pre>
+<h2>4. Best Practices for Redis in Node.js</h2>
+<ul class="preUl"><li><strong>Use TTL for cache</strong>
+  Always set a time-to-live (TTL) for keys to prevent memory overflow and ensure that outdated data is automatically removed.</li>
+  <li><strong>Command Pipelining (Pipeline)</strong>
+    For bulk operations, use pipeline to reduce the number of RTTs and speed up Redis.
+    Pipeline in Redis is a way to send multiple commands at once without waiting for each response individually.
+    How it works:
+    Regular scenario:<pre><code class="language-javascript">
+client → Redis: SET key1 value1
+Redis → client: OK
+client → Redis: SET key2 value2
+Redis → client: OK
+client → Redis: GET key1
+Redis → client: value1</code></pre>
+    With pipeline:<pre><code class="language-javascript">
+client → Redis: SET key1 value1, SET key2 value2, GET key1
+Redis → client: OK, OK, value1</code></pre></li>
+  <li><strong>Choosing the right data structure</strong><br>
+    Pick the right data type for the task:<ul><br><li><strong>String</strong> — store single values, e.g., JSON cache or counters.
+      <pre><code class="language-javascript">
+await redis.set('pageViews', 100);
+let views = await redis.get('pageViews');</code></pre></li><br>
+      <li><strong>List</strong> — ordered lists, e.g., task queues.
+        <pre><code class="language-javascript">
+await redis.lpush('taskQueue', JSON.stringify({id:1, task:'sendEmail'}));
+let job = await redis.rpop('taskQueue');</code></pre></li><br>
+      <li><strong>Sorted Set</strong> — sets with scores, perfect for leaderboards.
+        <pre><code class="language-javascript">
+await redis.zadd('leaderboard', 500, 'user123');
+let top = await redis.zrevrange('leaderboard', 0, 9, 'WITHSCORES');</code></pre></li><br>
+      <li><strong>Hash</strong> — objects with fields, convenient for storing user structures.
+        <pre><code class="language-javascript">
+await redis.hset('user:1', 'name', 'Alice', 'score', 200);
+let user = await redis.hgetall('user:1');</code></pre>
+      </li></ul></li>
+  <li><strong>Replication and Clusters</strong>
+
+    Replication and clusters help Redis scale and handle high load:
+    <ul><li><strong>Master-Slave replication</strong> — the master server handles writes, slaves replicate the data. Reads can be distributed across slaves.
+      <pre><code class="language-bash">
+# on master redis.conf
+replicaof no one
+# on slave redis.conf
+replicaof 127.0.0.1 6379</code></pre>
+    </li><br>
+      <li><strong>Redis Cluster</strong> — splits keys into hash slots and automatically distributes data across nodes.
+        <pre><code class="language-bash">
+# launching a cluster from multiple nodes
+redis-cli --cluster create 127.0.0.1:7000 127.0.0.1:7001 127.0.0.1:7002 --cluster-replicas 1
+    </code></pre></li></ul>
+    This allows Redis to scale both memory and speed horizontally.
+  </li>
+  <li><strong>Monitoring and alerting</strong><br>
+    Monitor Redis state to avoid failures:
+    <ul>
+      <li>Memory — how full the server is</li>
+      <li>Number of keys — to prevent memory overflow</li>
+      <li>Latency — to ensure fast request handling</li>
+      <li>Connection errors</li>
+    </ul>
+    Tools: <strong>Redis CLI</strong> (basic commands), <strong>RedisInsight</strong> (visualization), <strong>Prometheus + Grafana</strong> (metrics and alerts).
+  </li>
+  <li><strong>Memory policy</strong><br>
+    When Redis runs out of memory, you need to decide in advance which keys to evict:
+    <ul>
+      <li><strong>volatile-lru</strong> — remove the least recently used keys that have TTL set</li>
+      <li><strong>allkeys-lru</strong> — remove the least recently used keys, even without TTL</li>
+    </ul>
+    Example in redis.conf:<pre><code class="language-bash">
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+</code></pre>
+  </li><li><strong>Compressing large objects</strong><br>
+    If you store large JSON or arrays, use compression like gzip or LZ4.
+
+    Example in Node.js with gzip:<pre><code class="language-javascript">
+const zlib = require('zlib');
+let bigData = JSON.stringify(largeObject);
+let compressed = zlib.gzipSync(bigData);
+await redis.set('bigKey', compressed);
+
+let stored = await redis.getBuffer('bigKey');
+let original = JSON.parse(zlib.gunzipSync(stored).toString());
+</code></pre>This saves memory and speeds up data transfer.
+  </li>
+  <li><strong>Connection pool</strong><br>
+    Use a connection pool so that multiple workers/threads can work with Redis simultaneously without blocking.
+    ioredis does this automatically, but you can control it:
+    <pre><code class="language-javascript">
+const Redis = require('ioredis');
+const cluster = new Redis.Cluster([
+  { host: '127.0.0.1', port: 7000 },
+  { host: '127.0.0.1', port: 7001 },
+]);
+</code></pre>
+    The pool distributes requests across cluster nodes, speeding up processing.
+  </li></ul>
+

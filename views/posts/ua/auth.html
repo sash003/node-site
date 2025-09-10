@@ -1,0 +1,401 @@
+
+JWT, Passport.js та сесії в Node.js — це основа для безпечної автентифікації користувачів. Розглянемо підходи та відмінності між зберіганням даних у cookie та localStorage.
+
+<h2>Що таке автентифікація та сесії</h2>
+Автентифікація — процес підтвердження особи користувача.
+Сесія — це спосіб зберігати стан користувача між запитами. У веб-додатках сесії потрібні, щоб користувач залишався «в системі» без повторного логіну на кожному запиті.
+
+<h2>JWT (JSON Web Token)</h2>
+JWT — це компактний токен, який можна передавати між клієнтом та сервером.
+Він складається з трьох частин: header, payload та signature.
+Токен створюється сервером після успішного логіну і підписується секретом.
+Клієнт зберігає токен і відправляє його в кожному запиті (зазвичай у заголовку Authorization).
+
+<h2>Passport.js</h2>
+Passport.js — популярний middleware для Node.js, який спрощує автентифікацію.
+Він підтримує локальні стратегії (логін + пароль), OAuth (Google, Facebook), JWT та інші.
+Приклад з локальною стратегією:
+<pre><code class="language-javascript">
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+
+passport.use(new LocalStrategy(
+  function(username, password, done) {
+    User.findOne({ username }, function(err, user) {
+      if (err) return done(err);
+      if (!user) return done(null, false);
+      if (!user.verifyPassword(password)) return done(null, false);
+      return done(null, user);
+    });
+  }
+));
+</code></pre>
+
+<h2>Cookie vs localStorage</h2>
+Обидва варіанти можуть зберігати токени або сесійні дані, але є відмінності:
+
+<strong>Cookie</strong>
+<ul>
+  <li>Відправляється автоматично з кожним HTTP-запитом до домену.</li>
+  <li>Може бути HttpOnly — недоступна з JS, захищає від XSS.</li>
+  <li>Можна встановити термін життя, домен і шлях.</li>
+</ul>
+
+<strong>localStorage</strong>
+<ul>
+  <li>Доступна тільки через JavaScript.</li>
+  <li>Не відправляється автоматично на сервер.</li>
+  <li>Вразлива до XSS, але простіша для SPA (single-page applications).</li>
+</ul>
+
+<h2>Приклад з JWT та cookie</h2>
+1. Сервер створює JWT після логіну:
+<pre><code class="language-javascript">
+const jwt = require('jsonwebtoken');
+const token = jwt.sign({ id: user.id }, 'secret', { expiresIn: '1h' });
+res.cookie('token', token, { httpOnly: true });
+res.send({ success: true });
+</code></pre>
+2. Клієнт при кожному запиті використовує cookie автоматично.
+3. На сервері перевірка токена:
+<pre><code class="language-javascript">
+const token = req.cookies.token;
+jwt.verify(token, 'secret', (err, decoded) => {
+  if (err) return res.status(401).send('Unauthorized');
+  req.user = decoded;
+  next();
+});
+</code></pre>
+
+<h2>Висновок</h2>
+<ul>
+  <li>Для REST API та SPA часто використовують JWT + localStorage.</li>
+  <li>Для традиційних серверних додатків з рендерингом HTML зручніше WT або сесії в HttpOnly cookie.</li>
+  <li>Passport.js спрощує роботу з різними стратегіями.</li>
+</ul>
+Правильна комбінація залежить від типу додатка, вимог безпеки та архітектури.
+
+<h2>Приклад автентифікації Node.js + Express з Passport.js, JWT та cookie</h2>
+
+<h2>Встановлення залежностей</h2>
+<pre><code class="language-javascript">
+npm install express passport passport-local jsonwebtoken cookie-parser body-parser bcrypt
+</code></pre>
+
+<h2>Фронтенд</h2>
+HTML + jQuery форма логіну/логауту + перевірка профілю
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Автентифікація JWT + cookie</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+  <h2>Вхід</h2>
+  <form id="loginForm">
+    <input type="text" id="username" placeholder="Логін" required><br>
+    <input type="password" id="password" placeholder="Пароль" required><br>
+    <button type="submit">Увійти</button>
+  </form>
+
+  <button id="logoutBtn" style="display:none;">Вийти</button>
+  <button id="profileBtn" style="display:none;">Мій профіль</button>
+
+  <div id="output"></div>
+
+  <script>
+    // Логін
+    $('#loginForm').on('submit', function (e) {
+      e.preventDefault();
+      $.ajax({
+        url: '/login',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({
+          username: $('#username').val(),
+          password: $('#password').val()
+        }),
+        success: function (res) {
+          $('#output').text(res.message);
+          $('#loginForm').hide();
+          $('#logoutBtn, #profileBtn').show();
+        },
+        error: function (xhr) {
+          $('#output').text(xhr.responseJSON?.message || 'Помилка входу');
+        }
+      });
+    });
+
+    // Профіль
+    $('#profileBtn').on('click', function () {
+      $.ajax({
+        url: '/profile',
+        method: 'GET',
+        success: function (res) {
+          $('#output').text(res.message);
+        },
+        error: function () {
+          $('#output').text('Не авторизовано');
+        }
+      });
+    });
+
+    // Вихід
+    $('#logoutBtn').on('click', function () {
+      $.ajax({
+        url: '/logout',
+        method: 'POST',
+        success: function (res) {
+          $('#output').text(res.message);
+          $('#loginForm').show();
+          $('#logoutBtn, #profileBtn').hide();
+        }
+      });
+    });
+  </script>
+</body>
+</html>
+</code></pre>
+<h2>app.js — основной сервер</h2>
+<pre><code class="language-javascript">
+const express = require('express');
+const passport = require('passport');
+const LocalStrategy = require('passport-local').Strategy;
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
+
+const app = express();
+const port = 3000;
+
+// Фейкова база користувачів (зразу с хешем)
+const users = [
+  { id: 1, username: 'user1', passwordHash: bcrypt.hashSync('password', 10) }
+];
+
+// Middleware
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+app.use(cookieParser());
+app.use(passport.initialize());
+
+// Настройка стратегии Passport.js (логін/пароль)
+passport.use(new LocalStrategy(
+  function (username, password, done) {
+    const user = users.find(u => u.username === username);
+    if (!user) return done(null, false, { message: 'Невірний логін' });
+
+    if (!bcrypt.compareSync(password, user.passwordHash)) {
+      return done(null, false, { message: 'Невірный пароль' });
+    }
+
+    return done(null, user);
+  }
+));
+
+// Роут логина
+app.post('/login', (req, res, next) => {
+  passport.authenticate('local', (err, user, info) => {
+    if (err) return next(err);
+    if (!user) return res.status(401).json({ success: false, message: info.message });
+
+    // Генерация JWT
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      'secret',             // секрет для підпису (лучше винести в .env)
+      { expiresIn: '1h' }
+    );
+
+    // Отправка токена в cookie (HttpOnly)
+    res.cookie('token', token, { httpOnly: true });
+    res.json({ success: true, message: 'Успішный вход' });
+  })(req, res, next); // вызов колбэка authenticate
+});
+
+// Middleware для провірки JWT із cookie
+function authenticateJWT(req, res, next) {
+  const token = req.cookies.token;
+  if (!token) return res.status(401).send('Unauthorized');
+
+  jwt.verify(token, 'secret', (err, decoded) => {
+    if (err) return res.status(401).send('Unauthorized');
+    req.user = decoded;
+    next();
+  });
+}
+
+// Приватный роут
+app.get('/profile', authenticateJWT, (req, res) => {
+  res.json({ message: `Добро пожаловать, ${req.user.username}` });
+});
+
+// Logout
+app.post('/logout', (req, res) => {
+  res.clearCookie('token');
+  res.json({ success: true, message: 'Вы вышли' });
+});
+
+// Старт сервера
+app.listen(port, () => console.log(`Server running on http://localhost:${port}`));
+
+</code></pre>
+<h2>Як працює</h2>
+- Користувач відправляє POST на `/login` з `username` та `password`.
+- Passport перевіряє логін та пароль.
+- Якщо все правильно, сервер створює JWT і відправляє його в HttpOnly cookie.
+- Будь-який роут з middleware `authenticateJWT` перевіряє cookie та розшифровує токен.
+- Logout просто очищує cookie.
+<h2>Безпека</h2>
+- JWT у cookie HttpOnly захищає від XSS.
+- Для SPA можна використовувати localStorage, але тоді потрібно враховувати CSRF.
+- Passport.js дозволяє легко підключати OAuth та інші стратегії.
+
+<h2>JWT Авторизація через LocalStorage</h2>
+Фротненд
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>JWT + LocalStorage</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 20px; }
+    input, button { margin: 5px; padding: 6px; }
+    pre { background: #f4f4f4; padding: 10px; border-radius: 5px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+<h1>JWT Авторизація через LocalStorage</h1>
+
+<form id="loginForm">
+  <input type="text" id="username" placeholder="Логин" required>
+  <input type="password" id="password" placeholder="Пароль" required>
+  <button type="submit">Войти</button>
+</form>
+
+<button id="getProfile">Профиль</button>
+<button id="logout">Выйти</button>
+
+<pre id="output"></pre>
+
+<script>
+  const API = "http://localhost:3000";
+
+  // Логин
+  $("#loginForm").submit(function(e) {
+    e.preventDefault();
+    $.post(API + "/login", {
+      username: $("#username").val(),
+      password: $("#password").val()
+    }, function(data) {
+      if (data.success && data.token) {
+        localStorage.setItem("jwt", data.token);
+      }
+      $("#output").text(JSON.stringify(data, null, 2));
+    }).fail(err => {
+      $("#output").text("Ошибка: " + err.responseJSON?.message);
+    });
+  });
+
+  // Профиль
+  $("#getProfile").click(function() {
+    const token = localStorage.getItem("jwt");
+    if (!token) return $("#output").text("Нет токена в localStorage");
+
+    $.ajax({
+      url: API + "/profile",
+      method: "GET",
+      headers: { "Authorization": "Bearer " + token },
+      success: function(data) {
+        $("#output").text(JSON.stringify(data, null, 2));
+      },
+      error: function() {
+        $("#output").text("Нет доступа (LocalStorage)");
+      }
+    });
+  });
+
+  // Выход
+  $("#logout").click(function() {
+    localStorage.removeItem("jwt");
+    $("#output").text("Вы вышли (localStorage очищен)");
+  });
+</script>
+</body>
+</html>
+</code></pre>
+Сервер
+<pre><code class="language-javascript">
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt');
+const cors = require('cors');
+
+const app = express();
+const port = 3000;
+
+// Разрішаем CORS (для фронта)
+app.use(cors());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+
+// Мокаєм базу користувачів
+const users = [
+  { id: 1, username: 'user1', passwordHash: bcrypt.hashSync('password', 10) }
+];
+
+// Секрет для JWT
+const SECRET = 'super_secret_key';
+
+// Логін — выдаём JWT
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = users.find(u => u.username === username);
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Невірный логін' });
+  }
+  if (!bcrypt.compareSync(password, user.passwordHash)) {
+    return res.status(401).json({ success: false, message: 'Невірный пароль' });
+  }
+
+  const token = jwt.sign({ id: user.id, username: user.username }, SECRET, { expiresIn: '1h' });
+  res.json({ success: true, token });
+});
+
+// Middleware для проверки JWT
+function authenticateJWT(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ message: 'Нет токена' });
+
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, SECRET, (err, decoded) => {
+    if (err) return res.status(403).json({ message: 'Недействительный токен' });
+    req.user = decoded;
+    next();
+  });
+}
+
+// Приватный роут
+app.get('/profile', authenticateJWT, (req, res) => {
+  res.json({ message: `Добро пожаловать, ${req.user.username}` });
+});
+
+app.listen(port, () => console.log(`🚀 Server running on http://localhost:${port}`));
+</code></pre>
+<h2>Висновок</h2>
+Аутентифікація – це основа будь-якої сучасної веб-розробки. Cookie і LocalStorage, Passport.js і JWT — це лише інструменти, які вирішують різні завдання. Немає «правильного» чи «неправильного» варіанта — є потрібним для твого проекту.
+
+Якщо потрібний класичний веб із серверними шаблонами - бери cookie + сесії.
+Якщо у тебе SPA або мобільний додаток - найчастіше підійде JWT через localStorage або cookie з HttpOnly.
+Passport.js закриває всі питання інтеграції зі сторонніми сервісами, а JWT гарний там, де потрібна масштабованість та мікросервіси.
+
+Головне завжди думати про безпеку: шифрувати дані, ставити правильні прапори на cookie, використовувати HTTPS і не зберігати зайвого в localStorage.
+
+І пам'ятай: хоч би як складно це здавалося, під капотом все зводиться до простого правила — ти даєш користувачеві токен, а сервер перевіряє, що він справжній. Решта — деталі реалізації.

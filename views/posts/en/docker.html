@@ -1,0 +1,321 @@
+<h2>Installing and First Launch of Docker on Windows</h2>
+<strong>Docker</strong> is a tool for application containerization. It allows running programs in isolated environments, making development and deployment more convenient and reliable.
+
+<h3>Step 1. Downloading Docker Desktop</h3>
+For Windows, <strong>Docker Desktop</strong> is used. Download the installer from the official website:
+<a href="https://www.docker.com/products/docker-desktop" target="_blank">Download Docker Desktop</a>
+
+<h3>Step 2. Installation</h3>
+Run the installer and follow the instructions:
+<ul>
+  <li>Check <em>Use WSL 2 instead of Hyper-V</em> (if available).</li>
+  <li>Optionally add a shortcut to the desktop.</li>
+  <li>Click <strong>Install</strong>.</li>
+</ul>
+<h3>Step 3. Reboot</h3>
+After installation is complete, Windows may ask for a reboot. Make sure to do it.
+
+<h3>Step 4. First Launch</h3>
+Run Docker Desktop. A whale icon 🐳 will appear in the tray. If everything is installed correctly, you’ll see the status <strong>Docker is running</strong>.
+
+<h3>Step 5. Checking if it Works</h3>
+Open PowerShell or CMD and run the commands:
+<pre><code class="language-bash">
+docker --version
+</code></pre>You will see the installed version of Docker.
+
+<pre><code class="language-bash">
+docker run hello-world
+</code></pre>This command will download a test image and run a container that outputs a welcome message. If you see it — installation was successful.
+
+<h2>Basic Docker Commands</h2>
+<h3>1. Check version</h3>
+<pre><code class="language-bash">
+docker --version
+</code></pre>
+<h3>2. Download and run a container</h3>
+<pre><code class="language-bash">
+docker run hello-world
+</code></pre>
+<h3>3. Run a container with Ubuntu image</h3>
+<pre><code class="language-bash">
+docker run -it ubuntu bash
+</code></pre>The -it flag runs the container in interactive mode
+
+<h3>4. List containers</h3>
+<pre><code class="language-bash">
+docker ps
+</code></pre>Only running containers
+
+<pre><code class="language-bash">
+docker ps -a
+</code></pre>All containers, including stopped ones
+
+<h3>5. Managing containers</h3>
+<ul>
+  <li><code>docker stop id</code> — stop a container</li>
+  <li><code>docker start id</code> — restart a container</li>
+  <li><code>docker rm id</code> — remove a container</li>
+</ul>
+
+<h3>6. Working with images</h3>
+<ul>
+  <li><code>docker pull nginx</code> — download the Nginx image</li>
+  <li><code>docker images</code> — list local images</li>
+  <li><code>docker rmi nginx</code> — remove an image</li>
+</ul>
+<h3>7. Container logs</h3>
+<pre><code class="language-bash">
+docker logs id
+</code></pre>
+<h3>8. Run a command inside a container</h3>
+<pre><code class="language-bash">
+docker exec -it id bash
+</code></pre>
+<h2>What is Docker</h2>
+Docker is a containerization platform. It packages an application with all dependencies into an isolated container, which runs the same way on any host.
+Containers are lightweight, start in seconds, and share the OS kernel, unlike virtual machines which have their own guest OS.
+
+<h3>Containers vs Virtual Machines</h3>
+<ul>
+  <li>VM: full guest OS, heavy, slow startup</li>
+  <li>Container: shared host kernel, only app processes and filesystem</li>
+  <li>VM — good for full isolation, container — for speed and density</li>
+</ul>
+<h3>What Docker does in practice</h3>
+<ul>
+  <li>Isolates processes, network, and filesystem (namespaces, cgroups)</li>
+  <li>Delivers environment as an image — a versioned layered snapshot</li>
+  <li>Runs images as containers</li>
+  <li>Provides image registries (Docker Hub, GitHub Container Registry, private)</li>
+  <li>Connects containers in networks (bridge, host, user-defined)</li>
+  <li>Provides persistent storage via volumes and bind mounts</li>
+</ul>
+<h3>Key entities</h3>
+<ul>
+  <li>Image — immutable template with app and dependencies</li>
+  <li>Container — running instance of an image (lifecycle: create → start → stop → rm)</li>
+  <li>Registry — image storage (pull/push)</li>
+  <li>Volume — external storage for data</li>
+  <li>Network — virtual network for container communication</li>
+  <li>Dockerfile — build recipe for an image</li>
+  <li>Compose — description of multiple services in one file</li>
+</ul>
+<h3>Ephemeral nature of containers</h3>
+The container filesystem is temporary.
+Data that needs to be preserved should go into a volume or bind mount.
+
+<h3>Basic workflow</h3>
+<pre><code class="language-bash">
+# 1) Pull an image
+docker pull nginx:latest
+
+# 2) Run a container from the image
+docker run -d --name web -p 8080:80 nginx:latest
+
+# 3) View logs and status
+docker logs -f web
+docker ps
+
+# 4) Update version (immutable infrastructure)
+docker pull nginx:stable
+docker stop web && docker rm web
+docker run -d --name web -p 8080:80 nginx:stable
+</code></pre>
+
+<h3>Example with volume (data outside container)</h3>
+<pre><code class="language-bash">
+# Create a named volume
+docker volume create appdata
+
+# Mount the volume when starting
+docker run -d --name db -v appdata:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=secret mysql:8
+</code></pre>
+<h3>Example with ports, env variables and exec</h3>
+<pre><code class="language-bash">
+# Map host port 8080 → container port 80, pass env
+docker run -d --name api -p 8080:80 -e NODE_ENV=production myorg/api:1.0.0
+
+# Enter a running container
+docker exec -it api sh
+</code></pre>
+<h3>Dockerfile (how an image is described)</h3>
+<pre><code class="language-dockerfile">
+# Minimal Node.js example
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 3000
+CMD ["node", "server.js"]
+</code></pre>
+<pre><code class="language-bash">
+# Build and run
+docker build -t myapp:1.0.0 .
+docker run -d --name myapp -p 3000:3000 myapp:1.0.0
+</code></pre>
+<h3>Compose (multiple services together)</h3>
+<pre><code class="language-yaml">
+# docker-compose.yml
+services:
+  web:
+    image: nginx:stable
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+  app:
+    build: .
+    environment:
+      - NODE_ENV=production
+    ports:
+      - "3000:3000"
+  db:
+    image: mysql:8
+    environment:
+      - MYSQL_ROOT_PASSWORD=secret
+    volumes:
+      - dbdata:/var/lib/mysql
+volumes:
+  dbdata:
+</code></pre>
+<pre><code class="language-bash"># Run the whole stack
+docker compose up -d
+docker compose logs -f
+docker compose down
+</code></pre>
+<h3>What Docker does NOT do</h3>
+<ul>
+  <li>It is not a full VM (no separate guest OS)</li>
+  <li>It does not store data itself — only via volumes and external DBs</li>
+  <li>It does not provide CI/CD by itself — but integrates perfectly into pipelines</li>
+</ul>
+<h3>When to use</h3>
+<ul>
+  <li>Microservices, isolated development and testing</li>
+  <li>Lightweight deployment to different servers without “it works on my machine”</li>
+  <li>Running third-party services (Nginx, MySQL, Redis) locally</li>
+</ul>
+<h3>When to reconsider</h3>
+<ul>
+  <li>Apps with tight hardware or graphics integration (GPU requires extra setup)</li>
+  <li>Heavy monoliths with slow cold start</li>
+  <li>Where a simple systemd service without isolation is enough</li>
+</ul>
+<h3>How it works on Windows</h3>
+Docker Desktop uses WSL 2 to run Linux containers.
+Windows Containers — a separate mode for Windows containers, enabled manually and rarely needed.
+By default, we work in Linux containers mode.
+
+<h2>Creating and Running a PHP Website in Docker</h2>
+
+<h3>Step 1. Project Structure</h3>
+<pre><code class="language-bash">
+php-docker/
+ ├── src/
+ │    └── index.php
+ └── docker-compose.yml
+</code></pre>
+
+<h3>Step 2. index.php</h3>
+<pre><code class="language-php">
+<?php
+phpinfo();
+</code></pre>
+
+<h3>Step 3. docker-compose.yml</h3>
+<pre><code class="language-yaml">
+services:
+  web:
+    image: php:8.2-apache
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html
+</code></pre>
+
+<h3>Step 4. Launch</h3>
+<pre><code class="language-bash">
+docker compose up -d
+</code></pre>
+Open in browser:
+<a href="http://localhost:8080" target="_blank">http://localhost:8080</a>
+
+---
+
+<h2>Creating and Running a Node.js Website in Docker</h2>
+
+<h3>Step 1. Project Structure</h3>
+<pre><code class="language-bash">
+node-docker/
+ ├── server.js
+ ├── package.json
+ └── Dockerfile
+</code></pre>
+
+<h3>Step 2. package.json</h3>
+<pre><code class="language-json">
+{
+  "name": "node-docker",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
+</code></pre>
+
+<h3>Step 3. server.js</h3>
+<pre><code class="language-js">
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Hello from Docker + Node.js!");
+});
+
+app.listen(3000, () => console.log("Server running on port 3000"));
+</code></pre>
+
+<h3>Step 4. Dockerfile</h3>
+<pre><code class="language-dockerfile">
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --only=production
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+</code></pre>
+
+<h3>Step 5. Build and Run</h3>
+<pre><code class="language-bash">
+docker build -t node-docker .
+docker run -d --name nodeapp -p 3000:3000 node-docker
+</code></pre>
+Open in browser:
+<a href="http://localhost:3000" target="_blank">http://localhost:3000</a>
+<h2>Tips and Useful Notes</h2>
+<ul>
+  <li>Use <code>.dockerignore</code> to exclude node_modules and other unnecessary files</li>
+  <li>For development: mount volumes (<code>-v ./src:/app/src</code>) and use <code>nodemon</code></li>
+  <li>For production: always pin image versions (e.g. <code>node:20-alpine</code>, <code>mysql:8.0.34</code>)</li>
+  <li>Use <code>docker system prune</code> to clean up unused images and containers</li>
+  <li>Prefer <code>docker compose</code> for multi-container applications</li>
+</ul>
+
+<h2>Summary</h2>
+Docker allows you to:
+<ul>
+  <li>Run PHP and Node.js apps in isolated environments</li>
+  <li>Easily manage dependencies and versions</li>
+  <li>Quickly deploy projects to different servers</li>
+  <li>Test applications in the same environment as production</li>
+</ul>
+This makes development and deployment much easier and more reliable.

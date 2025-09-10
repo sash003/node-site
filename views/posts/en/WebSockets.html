@@ -1,0 +1,141 @@
+
+WebSocket allows you to create real-time applications — chats, games, notifications. Unlike regular HTTP requests, the connection is maintained continuously, and the server can send data to the client on its own. In this article, we will build a chat with rooms using Node.js and the socket.io library.
+<h2>Installation</h2>
+Create a project folder and install dependencies
+<pre><code class="language-bash">
+mkdir websocket-chat
+cd websocket-chat
+npm init -y
+npm install express socket.io
+</code></pre>
+<h2>Node.js Server</h2>
+Create a file server.js and connect Express and socket.io
+<pre><code class="language-javascript">
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// serve static files from public folder
+app.use(express.static('public'));
+
+io.on('connection', (socket) => {
+  console.log('New user connected:', socket.id);
+
+  // user joins a room
+  socket.on('joinRoom', (room, username) => {
+    socket.join(room);
+    socket.username = username;
+    socket.room = room;
+    console.log(`${username} joined room ${room}`);
+
+    // message only for this room
+    io.to(room).emit('message', {
+      user: 'System',
+      text: `${username} has joined room ${room}`
+    });
+  });
+
+  // handle incoming messages
+  socket.on('chatMessage', (msg) => {
+    io.to(socket.room).emit('message', {
+      user: socket.username,
+      text: msg
+    });
+  });
+
+  // disconnect
+  socket.on('disconnect', () => {
+    if(socket.username && socket.room){
+      io.to(socket.room).emit('message', {
+        user: 'System',
+        text: `${socket.username} left the room`
+      });
+    }
+  });
+});
+
+server.listen(3000, () => {
+  console.log('Server running at http://localhost:3000');
+});
+</code></pre>
+<h2>Frontend</h2>
+In the public folder, create index.html. Here is the form to choose a name and room, as well as the chat itself
+<pre><code class="language-html">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebSocket Chat</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #222; color: #eee; }
+    #chat { display:none; }
+    #messages { border:1px solid #555; height:300px; overflow-y:scroll; padding:5px; margin-bottom:10px; }
+    #messages div { margin: 3px 0; }
+    #login { margin-bottom:20px; }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <input id="username" placeholder="Your name">
+    <input id="room" placeholder="Room">
+    <button id="join">Join</button>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input id="msg" placeholder="Message">
+    <button id="send">Send</button>
+  </div>
+
+  <script src="chat.js"></script>
+</body>
+</html>
+</code></pre>
+<h2>Client Script</h2>
+Create public/chat.js and write the client-side logic
+<pre><code class="language-javascript">
+$(function(){
+  const socket = io();
+
+  $('#join').click(function(){
+    const username = $('#username').val();
+    const room = $('#room').val();
+    if(username && room){
+      socket.emit('joinRoom', room, username);
+      $('#login').hide();
+      $('#chat').show();
+    }
+  });
+
+  $('#send').click(function(){
+    const msg = $('#msg').val();
+    if(msg){
+      socket.emit('chatMessage', msg);
+      $('#msg').val('');
+    }
+  });
+
+  socket.on('message', function(data){
+    $('#messages').append('&lt;div&gt;&lt;b&gt;' + data.user + ':&lt;/b&gt; ' + data.text + '&lt;/div&gt;');
+    $('#messages').scrollTop($('#messages')[0].scrollHeight);
+  });
+});
+</code></pre>
+<h2>socket.io Features</h2>
+Main events and capabilities
+<ul>
+  <li><b>connection</b> – triggered when a client connects</li>
+  <li><b>disconnect</b> – when disconnected</li>
+  <li><b>socket.join(room)</b> – join a room</li>
+  <li><b>io.to(room).emit()</b> – send a message to everyone in the room</li>
+  <li><b>socket.emit()</b> – message to a specific user</li>
+  <li><b>socket.broadcast.emit()</b> – message to everyone except the sender</li>
+</ul>
+<h2>Conclusion</h2>
+We built a Node.js chat with rooms, name-based login, and real-time messages. Socket.io simplifies working with WebSocket and allows building complex systems — chats, notifications, games. You can add authentication, store chat history in a database, and much more.

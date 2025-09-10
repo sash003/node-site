@@ -1,0 +1,83 @@
+
+Node.js by default runs in a single process and uses only one CPU core. On multi-core servers this creates a performance limitation. The solution is clustering and process management with PM2.
+<h2>Cluster Module</h2>
+Cluster is a built-in Node.js module that allows you to run multiple processes (workers), each handling requests. The master process distributes the load among workers.
+Basic example:
+<pre><code class="language-javascript">
+// Import the cluster module
+const cluster = require('cluster');
+// http is needed to create the server
+const http = require('http');
+// os lets us check the number of CPU cores
+const os = require('os');
+
+// Check if this is the master process
+if (cluster.isMaster) {
+  // Get number of available CPU cores
+  const numCPUs = os.cpus().length;
+  console.log(`Master process ${process.pid} started`);
+
+  // Fork as many workers as there are CPU cores
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork(); // create a new worker
+  }
+
+  // Event handler: if a worker dies
+  cluster.on('exit', (worker) => {
+    console.log(`Worker ${worker.process.pid} died, restarting...`);
+    // Create a new worker to replace the crashed one
+    cluster.fork();
+  });
+
+// If not master — then this is a worker
+} else {
+  // Each worker runs its own HTTP server
+  http.createServer((req, res) => {
+    res.writeHead(200); // HTTP 200 OK
+    res.end('Hello from worker ' + process.pid); // output process PID
+  }).listen(3000); // server listens on port 3000
+
+  console.log(`Worker ${process.pid} started`);
+}
+</code></pre>
+What happens here:
+isMaster — checks if the code is running in the master process.
+The master creates N workers equal to the number of CPU cores.
+Each worker is a separate Node.js process with its own server.
+Requests are automatically balanced between workers.
+If one worker crashes, the master restarts it.
+Now the app uses all CPU cores, and if a worker crashes it gets restarted automatically.
+<h2>Advantages of cluster</h2>
+<ul>
+  <li>Full use of all CPU cores</li>
+  <li>Load balancing with built-in tools</li>
+  <li>Automatic worker restart on failure</li>
+</ul>
+<h2>PM2 — Process Manager</h2>
+PM2 is a popular tool for running Node.js apps in production. It manages processes, balances load, and provides monitoring.
+
+Installation:
+<pre><code class="language-javascript">
+npm install pm2 -g
+</code></pre>
+Start an application:
+<pre><code class="language-javascript">
+pm2 start app.js -i max
+</code></pre>
+Here <code>-i max</code> means “use all CPU cores”. You can also specify an exact number of processes.
+<h2>Basic PM2 commands</h2>
+<pre><code class="language-javascript">
+pm2 list         # list processes
+pm2 stop 0       # stop a process
+pm2 restart all  # restart all processes
+pm2 monit        # resource monitoring
+pm2 logs         # view logs
+</code></pre>
+<h2>Why combine cluster and PM2</h2>
+<ul>
+  <li>Cluster enables multi-core usage in Node.js</li>
+  <li>PM2 adds easy management, monitoring, and auto-start on server boot</li>
+  <li>Together they provide stability and scalability for production</li>
+</ul>
+<h2>Conclusion</h2>
+For local development, you can use the built-in cluster. For production, it’s better to run the app via PM2 — it eliminates manual process management and makes it easy to scale your project under load.

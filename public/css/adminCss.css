@@ -1,0 +1,85 @@
+
+.chat-grid-admin {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 15px;
+    padding: 10px;
+}
+
+.chat-panel-admin {
+    border: 1px solid #ccc;
+    overflow: hidden;
+    border-radius: 11px;
+    display: flex;
+    flex-direction: column;
+    height: 370px;
+    background: #f9f9f9;
+}
+
+.chat-header-admin {
+    padding: 22px 10px;
+    background: #b83d3d;
+    border-bottom: 1px solid #ccc;
+    font-size: 14px;
+    text-align: center;
+    color: white;
+}
+
+.chat-messages-admin {
+    flex: 1;
+    padding: 8px 10px;
+    overflow-y: auto;
+    background: #fff;
+    width: 100%;
+    white-space: normal; /* разрешаем перенос строк */
+    word-wrap: break-word; /* переносим длинные слова */
+    overflow-wrap: break-word; /* современный аналог */
+    left: 4px;
+}
+
+.chat-message-admin {
+    margin-bottom: 5px;
+    padding: 12px 8px;
+    padding-bottom: 4px;
+    border-radius: 4px;
+}
+
+.chat-message-admin.from-admin {
+    background: #fff;
+}
+
+.chat-message-admin.from-user {
+    background: #bdb6ef;
+}
+
+.chat-time-admin {
+    font-size: 12px;
+    color: #666;
+    text-align: right;
+}
+
+.chat-input-form-admin {
+    display: flex;
+    border-top: 2px solid #ccc;
+    margin-top: 11px;
+}
+
+.chat-input-admin {
+    flex: 1;
+    resize: none;
+    padding: 8px;
+    box-shadow: 0 0 3px #054068;
+    border: none;
+}
+
+.chat-send-btn-admin {
+    padding: 0 15px;
+    border: none;
+    background: #2563eb;
+    color: #fff;
+    cursor: pointer;
+}
+
+.chat-from-admin {
+    font-weight: bold;
+}

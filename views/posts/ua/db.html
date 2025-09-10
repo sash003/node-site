@@ -1,0 +1,330 @@
+
+<h2>Про що стаття</h2>
+Підключимо три популярні бази даних до Node.js: MySQL, PostgreSQL та MongoDB.
+Розберемо встановлення драйверів, підключення, базові запити та повноцінний приклад CRUD для сутності <em>books</em> на Express.
+Наприкінці — поради щодо продуктивності та безпеки.
+<h2>Попередні вимоги</h2>
+Node.js 18+, npm, встановлений сервер БД (або хмарний інстанс), базові знання JavaScript та SQL.
+<h2>Встановлення залежностей</h2>
+<pre><code class="language-javascript">
+// MySQL
+npm i mysql2 dotenv express
+
+// PostgreSQL
+npm i pg dotenv express
+
+// MongoDB (через Mongoose)
+npm i mongoose dotenv express
+
+// Для удобства разработки
+npm i -D nodemon
+</code></pre>
+<h2>Структура проекта</h2>
+<pre><code class="language-javascript">.
+├─ .env
+├─ app.js
+├─ db
+│  ├─ mysql.js
+│  ├─ postgres.js
+│  └─ mongo.js
+└─ models
+   └─ book.mongo.model.js
+</code></pre>
+<h2>.env пример</h2>
+<pre><code class="language-javascript">
+# Общие
+PORT=3000
+
+# MySQL
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=pass
+MYSQL_DATABASE=app_db
+
+# PostgreSQL
+PG_HOST=127.0.0.1
+PG_PORT=5432
+PG_USER=postgres
+PG_PASSWORD=pass
+PG_DATABASE=app_db
+
+# MongoDB
+MONGO_URI=mongodb://127.0.0.1:27017/app_db
+</code></pre>
+<h2>Підключення до MySQL</h2>
+<pre><code class="language-javascript">
+// db/mysql.js
+require('dotenv').config();
+const mysql = require('mysql2/promise');
+
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST,
+  port: +process.env.MYSQL_PORT,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10
+});
+
+module.exports = { pool };
+</code></pre>
+<h3>Іниціалізация таблиці MySQL</h3>
+<pre><code class="language-javascript">
+CREATE TABLE IF NOT EXISTS books (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  author VARCHAR(255) NOT NULL,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+</code></pre>
+<h2>Підключення до PostgreSQL</h2>
+<pre><code class="language-javascript">
+// db/postgres.js
+require('dotenv').config();
+const { Pool } = require('pg');
+
+const pool = new Pool({
+  host: process.env.PG_HOST,
+  port: +process.env.PG_PORT,
+  user: process.env.PG_USER,
+  password: process.env.PG_PASSWORD,
+  database: process.env.PG_DATABASE,
+  max: 10
+});
+
+module.exports = { pool };
+</code></pre>
+<h3>Іниціалізация таблиці PostgreSQL</h3>
+<pre><code class="language-javascript">
+CREATE TABLE IF NOT EXISTS books (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  author TEXT NOT NULL,
+  price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+</code></pre>
+<h2>Підключення до MongoDB</h2>
+<pre><code class="language-javascript">
+// db/mongo.js
+require('dotenv').config();
+const mongoose = require('mongoose');
+
+async function connectMongo() {
+  mongoose.set('strictQuery', true);
+  await mongoose.connect(process.env.MONGO_URI);
+  return mongoose.connection;
+}
+
+module.exports = { connectMongo };
+</code></pre>
+<h3>Модель книги для MongoDB</h3>
+<pre><code class="language-javascript">
+// models/book.mongo.model.js
+const mongoose = require('mongoose');
+
+const BookSchema = new mongoose.Schema({
+  title: { type: String, required: true, index: true },
+  author: { type: String, required: true },
+  price: { type: Number, default: 0 }
+}, { timestamps: true });
+
+module.exports = mongoose.model('Book', BookSchema);
+</code></pre>
+<h2>Express-программа</h2>
+<pre><code class="language-javascript">
+// app.js
+require('dotenv').config();
+const express = require('express');
+const app = express();
+
+app.use(express.json());
+
+// Подключи нужные роуты
+// const mysqlRoutes = require('./routes/books.mysql');
+// const pgRoutes = require('./routes/books.pg');
+// const mongoRoutes = require('./routes/books.mongo');
+
+// app.use('/api/books', mysqlRoutes);
+// app.use('/api/books', pgRoutes);
+// app.use('/api/books', mongoRoutes);
+
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+const port = process.env.PORT || 3000;
+app.listen(port, () => console.log("Server on http://localhost:" + port));
+</code></pre>
+<h2>CRUD для MySQL</h2>
+<pre><code class="language-javascript">
+// routes/books.mysql.js
+const { Router } = require('express');
+const { pool } = require('../db/mysql');
+const r = Router();
+
+r.post('/', async (req, res) => {
+  const { title, author, price } = req.body;
+  const [result] = await pool.execute(
+    'INSERT INTO books (title, author, price) VALUES (?, ?, ?)',
+    [title, author, price ?? 0]
+  );
+  res.status(201).json({ id: result.insertId, title, author, price: +price || 0 });
+});
+
+r.get('/', async (_req, res) => {
+  const [rows] = await pool.query('SELECT * FROM books ORDER BY id DESC');
+  res.json(rows);
+});
+
+r.get('/:id', async (req, res) => {
+  const [rows] = await pool.execute('SELECT * FROM books WHERE id=?', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.put('/:id', async (req, res) => {
+  const { title, author, price } = req.body;
+  const [result] = await pool.execute(
+    'UPDATE books SET title=?, author=?, price=? WHERE id=?',
+    [title, author, price ?? 0, req.params.id]
+  );
+  if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
+  res.json({ id: +req.params.id, title, author, price: +price || 0 });
+});
+
+r.delete('/:id', async (req, res) => {
+  const [result] = await pool.execute('DELETE FROM books WHERE id=?', [req.params.id]);
+  if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>CRUD для PostgreSQL</h2>
+<pre><code class="language-javascript">
+// routes/books.pg.js
+const { Router } = require('express');
+const { pool } = require('../db/postgres');
+const r = Router();
+
+r.post('/', async (req, res) => {
+  const { title, author, price } = req.body;
+  const { rows } = await pool.query(
+    'INSERT INTO books (title, author, price) VALUES ($1,$2,$3) RETURNING *',
+    [title, author, price ?? 0]
+  );
+  res.status(201).json(rows[0]);
+});
+
+r.get('/', async (_req, res) => {
+  const { rows } = await pool.query('SELECT * FROM books ORDER BY id DESC');
+  res.json(rows);
+});
+
+r.get('/:id', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM books WHERE id=$1', [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.put('/:id', async (req, res) => {
+  const { title, author, price } = req.body;
+  const { rowCount, rows } = await pool.query(
+    'UPDATE books SET title=$1, author=$2, price=$3 WHERE id=$4 RETURNING *',
+    [title, author, price ?? 0, req.params.id]
+  );
+  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  res.json(rows[0]);
+});
+
+r.delete('/:id', async (req, res) => {
+  const { rowCount } = await pool.query('DELETE FROM books WHERE id=$1', [req.params.id]);
+  if (!rowCount) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>CRUD для MongoDB</h2>
+<pre><code class="language-javascript">
+// routes/books.mongo.js
+const { Router } = require('express');
+const { connectMongo } = require('../db/mongo');
+const Book = require('../models/book.mongo.model');
+const r = Router();
+
+let ready = false;
+r.use(async (_req, _res, next) => {
+  if (!ready) { await connectMongo(); ready = true; }
+  next();
+});
+
+r.post('/', async (req, res) => {
+  const doc = await Book.create({ title: req.body.title, author: req.body.author, price: req.body.price ?? 0 });
+  res.status(201).json(doc);
+});
+
+r.get('/', async (_req, res) => {
+  const list = await Book.find().sort({ _id: -1 }).lean();
+  res.json(list);
+});
+
+r.get('/:id', async (req, res) => {
+  const doc = await Book.findById(req.params.id).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json(doc);
+});
+
+r.put('/:id', async (req, res) => {
+  const doc = await Book.findByIdAndUpdate(
+    req.params.id,
+    { title: req.body.title, author: req.body.author, price: req.body.price ?? 0 },
+    { new: true, runValidators: true }
+  ).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json(doc);
+});
+
+r.delete('/:id', async (req, res) => {
+  const doc = await Book.findByIdAndDelete(req.params.id).lean();
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
+
+module.exports = r;
+</code></pre>
+<h2>Тестирование CRUD</h2>
+<pre><code class="language-javascript">
+// CREATE
+curl -X POST http://localhost:3000/api/books -H "Content-Type: application/json" -d '{"title":"Bhagavad-gita","author":"Vyasa","price":10.5}'
+
+// READ ALL
+curl http://localhost:3000/api/books
+
+// READ ONE
+curl http://localhost:3000/api/books/1
+
+// UPDATE
+curl -X PUT http://localhost:3000/api/books/1 -H "Content-Type: application/json" -d '{"title":"Gita","author":"Vyasa","price":12}'
+
+// DELETE
+curl -X DELETE http://localhost:3000/api/books/1
+</code></pre>
+<h2>Рекомендації з безпеки та продуктивності</h2>
+1. Використовуй параметризовані запити (placeholders `?`, `$1`) – це захист від SQL-ін'єкцій.
+2. Ніколи не зберігай паролі та ключі в коді - тільки в `.env`.
+3. Обмежуй пул з'єднань (`connectionLimit`, `max`).
+4. Роби пагінацію (`LIMIT/OFFSET` або `skip/limit` у MongoDB).
+5. Став індекси на поля, що часто фільтруються (`title`, `author`).
+6. Логуй помилки (наприклад, `pino`, `morgan`).
+7. Роби регулярні бекапи БД.
+8. Для важких запитів використовуй кешування (Redis).
+9. Включай моніторинг (Prometheus, APM).
+10. Оновлюй залежності (`npm audit`, `snyk`).
+<h2>Підсумки</h2>
+Ми підключили MySQL, PostgreSQL та MongoDB до Node.js, створили таблиці/схему та реалізували повноцінний CRUD на Express.
+Вибирай стек під завдання:
+- MySQL/PostgreSQL - сувора схема та SQL.
+- MongoDB - гнучкість та швидкість розробки.

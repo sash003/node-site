@@ -1,0 +1,522 @@
+<h2>Для яких сайтів достатньо просто GraphQL + Redis</h2>
+
+<b>Якщо у вас:</b>
+<ul>
+  <li>Невелика або середня база (кілька тисяч/десятків тисяч записів)</li>
+  <li>Невелика кількість одночасних користувачів (до ~1000–2000 у піку)</li>
+  <li>Запити відносно прості — без складних JOIN/агрегацій</li>
+  <li>Кешуємо результати в Redis — повторні запити йдуть з пам’яті</li>
+</ul>
+
+<b>Приклади сайтів:</b>
+<ul>
+  <li>Блоги, новинні сайти, каталоги ігор/товарів середнього розміру</li>
+  <li>Лендінги з динамічним контентом (сторінки з продуктами, профілі користувачів)</li>
+  <li>Внутрішні сервіси/адмінки з обмеженою кількістю користувачів</li>
+</ul>
+
+<h3>Навантаження</h3>
+<table border="1" cellspacing="0" cellpadding="5">
+  <thead>
+  <tr>
+    <th>Кількість одночасних користувачів</th>
+    <th>Сценарій</th>
+    <th>Достатньо GraphQL + Redis?</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>до 1000–2000</td>
+    <td>звичайні GET/POST запити до API</td>
+    <td>Так</td>
+  </tr>
+  <tr>
+    <td>2000–5000</td>
+    <td>багато даних, складні фільтри</td>
+    <td>Можна, але краще додати LRU/оптимізації</td>
+  </tr>
+  <tr>
+    <td>>5000</td>
+    <td>інтенсивні запити до бази, складні зв’язки</td>
+    <td>Бажано DataLoader + батчі + додатковий кеш у пам’яті</td>
+  </tr>
+  </tbody>
+</table>
+
+<h3>Коли потрібні додаткові оптимізації</h3>
+<ul>
+  <li>N+1 проблема в GraphQL → багато маленьких запитів до бази</li>
+  <li>Дуже часто змінюваний контент → TTL у Redis мало допомагає</li>
+  <li>Великі таблиці → складні JOIN/агрегації</li>
+  <li>Високі піки навантаження (>5000–10000 одночасних користувачів)</li>
+</ul>
+
+Додаткові рішення:
+<ul>
+  <li>DataLoader — об’єднує схожі запити в один</li>
+  <li>LRU-кеш у Node.js — для часто використовуваних даних прямо в пам’яті</li>
+  <li>Шардинг Redis / кластеризація — якщо дані не вміщуються в один інстанс</li>
+</ul>
+
+<h2>Шардинг Redis / кластеризація</h2>
+
+<strong>Шардинг (sharding)</strong> — розділення даних на частини.
+<ul>
+  <li>Redis зберігає все в пам’яті (RAM), і якщо даних занадто багато, щоб умістити їх на одному сервері, їх ділять на кілька частин — шардів.</li>
+  <li>Кожен шард зберігається на окремому сервері. Приклад:</li>
+</ul>
+<table border="1" cellspacing="0" cellpadding="5">
+  <thead>
+  <tr>
+    <th>Сервер</th>
+    <th>Збережені ID користувачів</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>Redis Node 1</td>
+    <td>id 1–5 млн</td>
+  </tr>
+  <tr>
+    <td>Redis Node 2</td>
+    <td>id 5–10 млн</td>
+  </tr>
+  </tbody>
+</table>
+
+<strong>Кластеризація Redis</strong> — просунута версія шардингу:
+<ul>
+  <li>Автоматично ділить дані на слоти (16384 слота у стандартному кластері)</li>
+  <li>Перенаправляє запити до потрібного вузла</li>
+  <li>Підтримує репліки для відмовостійкості (якщо один сервер падає, дані є на іншому)</li>
+</ul>
+Приклад кластера:
+<pre>
++-------------------+     +-------------------+
+| Redis Node 1      |     | Redis Node 2      |
+| Slots 0-8191      |     | Slots 8192-16383 |
+| Master + Replica  |     | Master + Replica  |
++-------------------+     +-------------------+
+</pre>
+
+<h3>Навіщо це потрібно</h3>
+<ul>
+  <li>Дані не вміщуються на одному сервері</li>
+  <li>Масштабованість — більше користувачів, більше кешованих об’єктів</li>
+  <li>Відмовостійкість — якщо один сервер падає, інший продовжує працювати</li>
+</ul>
+
+<strong>Підсумок:</strong>
+<ul>
+  <li><strong>Sharding</strong> — ручне або автоматичне розділення даних на кілька серверів</li>
+  <li><strong>Кластеризація</strong> — автоматичний шардинг + реплікація + відмовостійкість</li>
+</ul>
+
+Конфігурація GraphQL + Redis підходить для більшості стартапів, блогів і невеликих каталогів. Більш складні оптимізації потрібні лише для великих проєктів із мільйонами записів та тисячами одночасних користувачів. Зараз покажу вам, як це у мене реалізовано для інтернет-магазину ігор.
+<pre><code class="language-javascript">
+// app.js, головний файл застосунку
+const express = require('express');
+const app = express();
+const port = 4321;
+const path = require('path');
+const http = require('http');
+const server = http.createServer(app);
+const multer = require('multer');
+const fs = require('fs');
+const FileType = require('file-type');
+const session = require('express-session');
+const ejs = require('ejs');
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const redis = require('redis');
+const { ApolloServer, gql } = require('apollo-server-express');
+const { Server } = require('socket.io');
+const Model = require('./models/Model');
+const clearAllCache = require('./clearCache'); // функція очищення Redis
+const cachePage = require('./cachePage'); // функція кешування Redis
+require('./chat')(server, Model); // підключаємо чат
+
+
+// 1. GraphQL схема
+//
+const typeDefs = gql`
+  type Game {
+    slug: String!
+    title: String!
+    genre: String
+    description: String
+    release_date: String
+    platform: String
+    stock: Int
+  }
+
+  type Query {
+    games: [Game]
+    platform(platform: String!): [Game]
+  }
+`;
+
+// 2. Резолвери з Redis кешем
+/*
+У GraphQL резолверах перший параметр — це parent (або root) об’єкт, який приходить від батьківського типу.
+Другий параметр — це об’єкт з аргументами запиту (args).
+Третій — context (дані сесії, авторизація і т.д.).
+Четвертий — info (інформація про поле, AST, schema).
+ */
+const resolvers = {
+  Query: {
+    // популярні ігри
+    games: async () => {
+      return await cachePage('games:all', async () => {
+        return Model.query('select * from `games` where `orders` > 33', [], ['id', 'release_date', 'mainPlatform', 'orders']);
+      }, 1); // TTL 60 секунд
+    },
+    platform: async (_, { platform }) => {
+      return await cachePage('games:category:'+platform, async () => {
+        return Model.query('select * from `games` where `mainPlatform` like ?', [`%${platform}%`], ['id', 'release_date', 'orders', 'mainPlatform']);
+      }, 1); // TTL 60 секунд
+    },
+    // тут ще один для конкретної гри
+  }
+}
+
+
+// обробник маршрутів
+// головна і по платформах
+app.get(['/', '/:slug'], async (req, res) => {
+  try {
+    const slug = Model.escapeHtml(req.params.slug);
+
+    if (!slug) {
+      // Головна сторінка: популярні ігри
+      const games = await resolvers.Query.games();
+
+      return res.render('layout', {
+        page: 'pages/home',
+        title: await Model.getTitleByKey('home'),
+        description: await Model.getDescByKey('home'),
+        games: await Model.buildGamesTable(games)
+      });
+    }
+
+    // Розділ платформи
+    const games = await resolvers.Query.platform(null, { platform: slug });
+
+    if (!games || !games.length) {
+      return res.status(404).send('Розділ не знайдено або ігор немає');
+    }
+
+    /*res.render — це метод в Express, який каже:
+«візьми шаблон (layout) і підстав туди дані, а потім віддай готовий HTML користувачу».
+    У мене він виглядає так
+    <%- include(`pages/header`) %>
+
+    <main>
+        <%- include(page) %>
+    </main>
+
+    <%- include(`pages/footer`) %>
+    */
+    res.render('layout', {
+      page: 'pages/home',
+      title: 'Ігри на '+slug,
+      description: 'Ігри на '+slug,
+      games: await Model.buildGamesTable(games)
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Помилка сервера');
+  }
+});
+
+
+
+
+// Створюємо самовикликану асинхронну функцію, щоб можна було використовувати await
+(async () => {
+
+  // Створюємо екземпляр ApolloServer
+  // Передаємо йому схеми (typeDefs) і резолвери (resolvers)
+  const apolloServer = new ApolloServer({ typeDefs, resolvers });
+
+  // Запускаємо сервер Apollo (потрібно, щоб GraphQL почав працювати)
+  // Це асинхронна операція, тому використовуємо await
+  await apolloServer.start();
+
+  // Підключаємо Apollo middleware до нашого Express-застосунку
+  // Це додає маршрут /graphql (за замовчуванням) до Express
+  apolloServer.applyMiddleware({ app });
+
+  // Запускаємо звичайний HTTP сервер Express на вказаному порту
+  server.listen(port, () => {
+    // Логуємо в консоль, що сервер запущено
+    console.log(`Сервер запущено: http://localhost:${port}`);
+
+    // Логуємо шлях GraphQL ендпоінта
+    console.log(`GraphQL endpoint: http://localhost:${port}${apolloServer.graphqlPath}`);
+  });
+
+})();
+</code></pre>
+<h2>Конфіг</h2>
+<pre><code class="language-javascript">
+// config.js
+require('dotenv').config(); // підключаємо .env
+
+module.exports = {
+  db: {
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: process.env.DB_CONN_LIMIT || 10,
+    queueLimit: 0
+  }
+};
+
+// файл конфігурації .env у корені сайту
+DB_HOST=localhost
+DB_USER=root
+DB_PASS=
+DB_NAME=gameshop
+DB_CONN_LIMIT=10
+</code></pre>
+
+<h2>Функції моделі</h2>
+<pre><code class="language-javascript">
+const mysql = require('mysql2/promise');
+const { db } = require('../config/config'); // підключаємо конфіг
+const fs = require('fs').promises;
+const path = require('path');
+
+const pool = mysql.createPool(db);
+
+// Перевірка підключення
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    console.log('MySQL підключено через пул');
+    conn.release();
+  } catch (err) {
+    console.error('Помилка підключення до MySQL:', err.message);
+  }
+})();
+
+/**
+ * Універсальна функція для виконання будь-яких SQL-запитів
+ */
+async function query(sql, params = [], ignoreFields = []) {
+  try {
+    const [results] = await pool.query(sql, params);
+
+    if (/^\s*select/i.test(sql)) {
+      let data = results;
+      if (ignoreFields.length) {
+        data = results.map(row => {
+          ignoreFields.forEach(f => delete row[f]);
+          return row;
+        });
+      }
+      return data;
+    } else {
+      return {
+        affectedRows: results.affectedRows,
+        insertId: results.insertId || null
+      };
+    }
+  } catch (err) {
+    throw err;
+  }
+}
+
+/**
+ * Перетворює масив ігор у HTML-таблицю
+ */
+async function buildGamesTable(rows) {
+  if (!rows || !rows.length) return '<p>Немає даних</p>';
+
+  let html = '<table class="data-table">';
+
+  for (const row of rows) {
+    html += '<tr>';
+
+    for (const key of Object.keys(row)) {
+      const val = row[key];
+      const tdClass = `data-td ${key}`;
+
+      if (key === 'slug' && val) {
+        const imgPath = path.join(__dirname, '..', 'public', 'img', 'games', `${val}.png`);
+
+        let imgSrc;
+        try {
+          await fs.access(imgPath);
+          imgSrc = `/img/games/${val}.png`;
+        } catch {
+          imgSrc = '/img/default.png';
+        }
+
+        html += `<td class="${tdClass} noPadd">
+          <a href="/game/${row.slug}" class="ajax-link">
+            <img src="${imgSrc}" alt="">
+          </a>
+        </td>`;
+      } else if (key === 'price' && val) {
+        html += `<td class="${tdClass}">
+          <a href="/game/${row.slug}" class="ajax-link">
+            ${val}<span class="g">₴</span>
+          </a>
+        </td>`;
+      } else {
+        html += `<td class="${tdClass}">
+          <a href="/game/${row.slug}" class="ajax-link">${val}</a>
+        </td>`;
+      }
+    }
+
+    html += '</tr>';
+  }
+
+  html += '</table>';
+  return html;
+}
+
+// Функція для безпечного тексту
+function escapeHtml(str = "") {
+  return String(str).replace(/[&<>"']/g, s => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[s]
+  ));
+}
+</code></pre>
+
+<h2>Файл cachePage.js (кешування з Redis)</h2>
+<pre><code class="language-javascript">
+const redisClient = require('./redisClient');
+
+/**
+ * Універсальний кеш для сторінок / статей
+ */
+async function cachePage(key, callback, ttl = 60) {
+  try {
+    const cached = await redisClient.get(key);
+
+    if (cached) {
+      console.log(`Віддаємо з Redis: ${key}`);
+      return JSON.parse(cached);
+    }
+
+    const data = await callback();
+    await redisClient.setEx(key, ttl, JSON.stringify(data));
+
+    console.log(`Збережено в Redis: ${key} (ttl=${ttl}s)`);
+    return data;
+
+  } catch (err) {
+    console.error('Помилка cachePage:', err);
+    return callback();
+  }
+}
+
+module.exports = cachePage;
+</code></pre>
+
+<h2>Файл redisClient.js</h2>
+<pre><code class="language-javascript">
+const redis = require('redis');
+//require('dotenv').config(); // якщо потрібен пароль
+
+let client;
+
+function getRedisClient() {
+  if (!client) {
+    client = redis.createClient({
+      url: 'redis://127.0.0.1:6379',
+      //password: process.env.REDIS_PASSWORD,
+      socket: {
+        reconnectStrategy: retries => Math.min(retries * 50, 500)
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error('Redis помилка:', err);
+    });
+
+    client.connect()
+      .then(() => console.log('Redis підключено'))
+      .catch(err => console.error('Помилка підключення до Redis:', err));
+
+    client.configSet('maxmemory', '256mb')
+      .then(() => client.configSet('maxmemory-policy', 'allkeys-lru'))
+      .then(() => console.log('Redis налаштовано для кешу'))
+      .catch(err => console.error('Помилка налаштування maxmemory:', err));
+  }
+  return client;
+}
+
+module.exports = getRedisClient();
+</code></pre>
+
+<h2>LRU-кеш у Node.js</h2>
+<strong>Що таке LRU-кеш:</strong>
+<ul>
+  <li><strong>LRU</strong> = <em>Least Recently Used</em> — «найменш нещодавно використаний».</li>
+  <li>Зберігає дані у пам’яті застосунку.</li>
+  <li>Коли пам’ять переповнюється, видаляє найстаріші/рідко використовувані елементи.</li>
+  <li>Добре підходить для кешу часто запитуваних об’єктів без перевантаження бази чи Redis.</li>
+</ul>
+
+<h3>Встановлення</h3>
+<pre><code class="language-javascript">
+npm install lru-cache
+</code></pre>
+
+<h3>Приклад використання</h3>
+<pre><code class="language-javascript">
+const LRU = require('lru-cache');
+
+const cache = new LRU({
+  max: 100,
+  ttl: 1000 * 60 * 5,
+});
+
+async function getGame(id) {
+  if (cache.has(id)) {
+    console.log('Дані взяті з LRU-кешу');
+    return cache.get(id);
+  }
+
+  const game = await fakeDbQuery(id);
+  console.log('Дані взяті з бази');
+
+  cache.set(id, game);
+
+  return game;
+}
+
+async function fakeDbQuery(id) {
+  return { id, title: `Game ${id}`, stock: 10 };
+}
+
+(async () => {
+  console.log(await getGame(1)); // з бази
+  console.log(await getGame(1)); // з кешу
+})();
+</code></pre>
+
+<h3>Вивід у консолі:</h3>
+<pre><code class="language-javascript">
+Дані взяті з бази
+{ id: 1, title: 'Game 1', stock: 10 }
+Дані взяті з LRU-кешу
+{ id: 1, title: 'Game 1', stock: 10 }
+</code></pre>
+
+<h3>Важливо:</h3>
+<ul>
+  <li>LRU зберігається у пам’яті Node.js, тому кеш скинеться при перезапуску сервера.</li>
+  <li>Добре працює для часто запитуваних невеликих об’єктів, щоб розвантажити базу.</li>
+  <li>Якщо потрібен кеш між серверами — використовуйте Redis.</li>
+</ul>
+<img src="/img/console.png" style="width: 100%;" alt="">
+

@@ -1,0 +1,179 @@
+
+<!-- Виджет чата -->
+<img src="/img/chat.png" id="chat" alt="">
+
+<div id="chatPanel">
+    <div id="chat-header">Chat</div>
+    <div id="chat-messages" style=""></div>
+    <div id="chat-input-wrap" style="">
+        <input id="userName" type="text" placeholder="Your name (remember)">
+        <textarea id="chat-input" placeholder="Your message.."></textarea>
+        <button id="chat-send"><img src="/img/button.png" alt=""></button>
+    </div>
+</div>
+
+
+
+<footer><img id="footer" src="/img/3.png" alt=""/>
+</footer>
+
+
+<img id="to_top" src="/img/top.png" alt="" />
+
+
+
+<div id="toast-container"></div>
+<style>
+  #toast-container {
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2em;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 9999;
+    background: #054068FF;
+    padding: 23px;
+    border-radius: 22px;
+    display: none;
+  }
+  @media (max-width: 700px){
+    #toast-container{
+      padding: 11px;
+      font-size: 1.2em;
+      border-radius: 7px;
+    }
+    #toast-container img{
+      margin-left: 3px !important;
+    }
+  }
+  .toast-letter {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: riseFade 1s forwards;
+  }
+
+  @keyframes riseFade {
+    0% { opacity: 0; transform: translateY(20px); }
+    50% { opacity: 1; transform: translateY(-5px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+</style>
+
+
+<script>
+  function showRainbowToast(firstText, secondText = '') {
+    const $container = $('#toast-container');
+    $container.html(''); // очистка
+
+    const colors = [
+      '#c35c19', '#70ce87', '#B27CCF', '#1391df',
+      '#bdbb21', '#D0E0E6', '#4d7e45', '#d18d0d'
+    ];
+
+    // Первая строка — радуга + картинка
+    function showFirstText(txt, callback) {
+      $container.html('');
+      [...txt].forEach((char, i) => {
+        const $span = $('<span>')
+          .addClass('toast-letter')
+          .css({
+            color: colors[i % colors.length],
+            'animation-delay': `${i * 0.1}s`
+          })
+          .text(char === ' ' ? '\u00A0' : char);
+        $container.append($span);
+      });
+
+      const $img = $('<img>')
+        .attr('src', '/img/ok.png')
+        .attr('alt', 'ok')
+        .css({ height: '0.8em', marginLeft: '8px', opacity: 0 });
+      $container.append($img);
+
+      $container.fadeIn(500, () => {
+        setTimeout(() => {
+          $img.animate({ opacity: 1 }, 600, () => {
+            setTimeout(() => {
+              $container.fadeOut(500, callback);
+            }, 2000);
+          });
+        }, txt.length * 100);
+      });
+    }
+
+    // Вторая строка — падающая радуга + картинка
+    function showSecondText(txt) {
+      $container.html('');
+
+      // Добавляем буквы
+      [...txt].forEach((char, i) => {
+        const $span = $('<span>')
+          .addClass('toast-letter')
+          .css({
+            display: 'inline-block',
+            position: 'relative',
+            top: '-100px',   // стартовая позиция выше
+            opacity: 0,      // сначала прозрачные
+            color: colors[i % colors.length]
+          })
+          .text(char === ' ' ? '\u00A0' : char);
+        $container.append($span);
+
+        // Анимация падения с проявлением и bounce
+        $span.delay(i * 100)
+          .animate({ top: 10, opacity: 1 }, 400)
+          .animate({ top: 0 }, 150);
+      });
+
+      // Добавляем картинку справа
+      const $img = $('<img>')
+        .attr('src', '/img/ok2.png')
+        .attr('alt', 'ok')
+        .css({ height: '0.8em', marginLeft: '8px', opacity: 0 });
+      $container.append($img);
+
+      // Анимация появления картинки
+      setTimeout(() => {
+        $img.animate({ opacity: 1 }, 600);
+      }, txt.length * 100 + 300);
+
+      $container.fadeIn(500);
+      setTimeout(() => $container.fadeOut(500), txt.length * 100 + 3000);
+    }
+
+    // Показываем сначала первую строку, затем вторую
+    showFirstText(firstText, () => {
+      if (secondText) showSecondText(secondText);
+    });
+  }
+
+
+  // Пример использования при загрузке страницы
+  window.addEventListener('load', () => {
+    let watch = parseInt(localStorage.getItem('watch') || '0', 10);
+    watch++;
+    localStorage.setItem('watch', watch);
+    if (watch < 3) {
+      showRainbowToast('Server on socket.io is running', 'Redis is connected');
+    }
+  });
+</script>
+
+
+
+
+<!-- Клиент Socket.IO -->
+<script src="/js/socket.io.js"></script>
+<script src="/js/lightbox2.js" type="text/javascript"></script>
+<script src="/js/prism.js" type="text/javascript"></script>
+<script src="/js/chat.js" type="text/javascript"></script>
+<script src="/js/ajax.js" type="text/javascript"></script>
+<script src="/js/script.js" type="text/javascript"></script>
+<script src="/js/register.js" type="text/javascript"></script>
+
+</body></html>

@@ -1,0 +1,562 @@
+<h2>Для каких сайтов хватит просто GraphQL + Redis</h2>
+
+<b>Если у вас:</b>
+<ul>
+  <li>Небольшая или средняя база (несколько тысяч/десятков тысяч записей)</li>
+  <li>Небольшое количество одновременных пользователей (до ~1000–2000 в пике)</li>
+  <li>Запросы относительно простые — без сложных JOIN/агрегаций</li>
+  <li>Кэшируем результаты в Redis — повторные запросы идут из памяти</li>
+</ul>
+
+<b>Примеры сайтов:</b>
+<ul>
+  <li>Блоги, новостные сайты, каталоги игр/товаров среднего размера</li>
+  <li>Лэндинги с динамическим контентом (страницы с продуктами, профили пользователей)</li>
+  <li>Внутренние сервисы/админки с ограниченным числом пользователей</li>
+</ul>
+
+<h3>Нагрузка</h3>
+<table border="1" cellspacing="0" cellpadding="5">
+  <thead>
+  <tr>
+    <th>Кол-во одновременных пользователей</th>
+    <th>Сценарий</th>
+    <th>Достаточно GraphQL + Redis?</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>до 1000–2000</td>
+    <td>обычные GET/POST запросы к API</td>
+    <td>Да</td>
+  </tr>
+  <tr>
+    <td>2000–5000</td>
+    <td>много данных, сложные фильтры</td>
+    <td>Можно, но лучше добавить LRU/оптимизации</td>
+  </tr>
+  <tr>
+    <td>>5000</td>
+    <td>интенсивные запросы к базе, сложные связи</td>
+    <td>Желательно DataLoader + батчи + дополнительный кэш в памяти</td>
+  </tr>
+  </tbody>
+</table>
+
+<h3>Когда нужны дополнительные оптимизации</h3>
+<ul>
+  <li>N+1 проблема в GraphQL → много маленьких запросов к базе</li>
+  <li>Очень часто меняющийся контент → TTL в Redis мало помогает</li>
+  <li>Большие таблицы → сложные JOIN/агрегации</li>
+  <li>Высокие пики нагрузки (>5000–10000 одновременных пользователей)</li>
+</ul>
+
+Дополнительные решения:
+<ul>
+  <li>DataLoader — объединяет похожие запросы в один</li>
+  <li>LRU-кэш в Node.js — для часто используемых данных прямо в памяти</li>
+  <li>Шардинг Redis / кластеризация — если данные не помещаются в один инстанс</li>
+</ul>
+
+<h2>Шардинг Redis / кластеризация</h2>
+<strong>Шардинг (sharding)</strong> — разделение данных на части.
+<ul>
+  <li>Redis хранит всё в памяти (RAM), и если данных слишком много, чтобы уместить их на одном сервере, их делят на несколько частей — шардов.</li>
+  <li>Каждый шард хранится на отдельном сервере. Пример:</li>
+</ul>
+<table border="1" cellspacing="0" cellpadding="5">
+  <thead>
+  <tr>
+    <th>Сервер</th>
+    <th>Хранимые ID пользователей</th>
+  </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>Redis Node 1</td>
+    <td>id 1–5 млн</td>
+  </tr>
+  <tr>
+    <td>Redis Node 2</td>
+    <td>id 5–10 млн</td>
+  </tr>
+  </tbody>
+</table>
+
+<strong>Кластеризация Redis</strong> — продвинутая версия шардинга:
+<ul>
+  <li>Автоматически делит данные на слоты (16384 слота в стандартном кластере)</li>
+  <li>Перенаправляет запросы к нужному узлу</li>
+  <li>Поддерживает реплики для отказоустойчивости (если один сервер падает, данные есть на другом)</li>
+</ul>
+Пример кластера:
+<pre>
++-------------------+     +-------------------+
+| Redis Node 1      |     | Redis Node 2      |
+| Slots 0-8191      |     | Slots 8192-16383 |
+| Master + Replica  |     | Master + Replica  |
++-------------------+     +-------------------+
+</pre>
+
+<h3>Зачем это нужно</h3>
+<ul>
+  <li>Данные не помещаются в один сервер</li>
+  <li>Масштабируемость — больше пользователей, больше кэшируемых объектов</li>
+  <li>Отказоустойчивость — если один сервер падает, другой продолжает работать</li>
+</ul>
+
+<strong>Итого:</strong>
+<ul>
+  <li><strong>Sharding</strong> — ручное или автоматическое разделение данных на несколько серверов</li>
+  <li><strong>Кластеризация</strong> — автоматический шардинг + репликация + отказоустойчивость</li>
+</ul>
+
+Конфигурация GraphQL + Redis подходит для большинства стартапов, блогов и небольших каталогов. Более сложные оптимизации нужны только для больших проектов с миллионами записей и тысячами одновременных пользователей. Сейчас покажу вам как это у меня реализовано для интернет-магазина игр.
+<pre><code class="language-javascript">
+// app.js, главный файл приложения
+const express = require('express');
+const app = express();
+const port = 4321;
+const path = require('path');
+const http = require('http');
+const server = http.createServer(app);
+const multer = require('multer');
+const fs = require('fs');
+const FileType = require('file-type');
+const session = require('express-session');
+const ejs = require('ejs');
+const bcrypt = require('bcrypt');
+const nodemailer = require('nodemailer');
+const redis = require('redis');
+const { ApolloServer, gql } = require('apollo-server-express');
+const { Server } = require('socket.io');
+const Model = require('./models/Model');
+const clearAllCache = require('./clearCache'); // функция очистки Redis
+const cachePage = require('./cachePage'); // функция кэширования Redis
+require('./chat')(server, Model); // подключаем чат
+
+
+// 1. GraphQL схема
+//
+const typeDefs = gql`
+  type Game {
+    slug: String!
+    title: String!
+    genre: String
+    description: String
+    release_date: String
+    platform: String
+    stock: Int
+  }
+
+  type Query {
+    games: [Game]
+    platform(platform: String!): [Game]
+  }
+`;
+
+// 2. Резолверы с Redis кэшем
+/*
+В GraphQL резолверах первый параметр — это parent (или root) объект, который приходит от родительского типа.
+Второй параметр — это объект с аргументами запроса (args).
+Третий — context (данные сессии, авторизация и т.д.).
+Четвёртый — info (информация о поле, AST, schema).
+ */
+const resolvers = {
+  Query: {
+    // популярные игры
+    games: async () => {
+      return await cachePage('games:all', async () => {
+        return Model.query('select * from `games` where `orders` > 33', [], ['id', 'release_date', 'mainPlatform', 'orders']);
+      }, 1); // TTL 60 секунд
+    },
+    platform: async (_, { platform }) => {
+      return await cachePage('games:category:'+platform, async () => {
+        return Model.query('select * from `games` where `mainPlatform` like ?', [`%${platform}%`], ['id', 'release_date', 'orders', 'mainPlatform']);
+      }, 1); // TTL 60 секунд
+    },
+    // тут ещё один для конкретной игры
+  }
+}
+
+
+// обработчик роутов
+// главная и по платформам
+app.get(['/', '/:slug'], async (req, res) => {
+  try {
+    const slug = Model.escapeHtml(req.params.slug);
+
+    if (!slug) {
+      // Главная страница: популярные игры
+      const games = await resolvers.Query.games();
+
+      return res.render('layout', {
+        page: 'pages/home',
+        title: await Model.getTitleByKey('home'),
+        description: await Model.getDescByKey('home'),
+        games: await Model.buildGamesTable(games)
+      });
+    }
+
+    // Раздел платформы
+    const games = await resolvers.Query.platform(null, { platform: slug });
+
+    if (!games || !games.length) {
+      return res.status(404).send('Раздел не найден или игр нет');
+    }
+
+    /*res.render — это метод в Express, который говорит:
+«возьми шаблон (layout) и подставь туда данные, а потом отдай готовый HTML пользователю».
+    У меня он выглядит так
+    <%- include(`pages/header`) %>
+
+    <main>
+        <%- include(page) %>
+    </main>
+
+    <%- include(`pages/footer`) %>
+    */
+    res.render('layout', {
+      page: 'pages/home',
+      title: 'Игры на '+slug,
+      description: 'Игры на '+slug,
+      games: await Model.buildGamesTable(games)
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Ошибка сервера');
+  }
+});
+
+
+
+
+// Создаём самовызывающуюся асинхронную функцию, чтобы можно было использовать await
+(async () => {
+
+  // Создаём экземпляр ApolloServer
+  // Передаём ему схемы (typeDefs) и резолверы (resolvers)
+  const apolloServer = new ApolloServer({ typeDefs, resolvers });
+
+  // Запускаем сервер Apollo (нужен, чтобы GraphQL начал работать)
+  // Это асинхронная операция, поэтому используем await
+  await apolloServer.start();
+
+  // Подключаем Apollo middleware к нашему Express-приложению
+  // Это добавляет маршрут /graphql (по умолчанию) к Express
+  apolloServer.applyMiddleware({ app });
+
+  // Запускаем обычный HTTP сервер Express на указанном порте
+  server.listen(port, () => {
+    // Логируем в консоль, что сервер запущен
+    console.log(`Сервер запущен: http://localhost:${port}`);
+
+    // Логируем путь GraphQL эндпоинта
+    console.log(`GraphQL endpoint: http://localhost:${port}${apolloServer.graphqlPath}`);
+  });
+
+})();
+</code></pre>
+
+Конфиг
+<pre><code class="language-javascript">
+// config.js
+require('dotenv').config(); // подключаем .env
+
+module.exports = {
+  db: {
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASS,
+    database: process.env.DB_NAME,
+    waitForConnections: true,
+    connectionLimit: process.env.DB_CONN_LIMIT || 10,
+    queueLimit: 0
+  }
+};
+
+
+// файл конфигурации .env в корне сайта
+DB_HOST=localhost
+DB_USER=root
+DB_PASS=
+DB_NAME=gameshop
+DB_CONN_LIMIT=10
+</code></pre>
+
+Функции модели
+<pre><code class="language-javascript">
+const mysql = require('mysql2/promise');
+const { db } = require('../config/config'); // подключаем конфиг
+const fs = require('fs').promises;
+const path = require('path');
+
+
+const pool = mysql.createPool(db);
+
+// Проверка подключения
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    console.log('MySQL подключен через пул');
+    conn.release();
+  } catch (err) {
+    console.error('Ошибка подключения к MySQL:', err.message);
+  }
+})();
+
+
+
+/**
+ * Универсальная функция для выполнения любых SQL-запросов
+ * @param {string} sql - SQL-запрос
+ * @param {Array} params - параметры для подготовленного запроса
+ * @returns {Promise<any>}
+ */
+async function query(sql, params = [], ignoreFields = []) {
+  try {
+    const [results] = await pool.query(sql, params);
+
+    if (/^\s*select/i.test(sql)) {
+      let data = results;
+      if (ignoreFields.length) {
+        data = results.map(row => {
+          ignoreFields.forEach(f => delete row[f]);
+          return row;
+        });
+      }
+      return data;
+    } else {
+      return {
+        affectedRows: results.affectedRows,
+        insertId: results.insertId || null
+      };
+    }
+  } catch (err) {
+    throw err;
+  }
+}
+
+
+/**
+ * Превращает массив игр в HTML-таблицу
+ * @param {Array} rows - массив объектов (игры) из БД
+ * @returns {string} - готовая HTML-таблица
+ */
+async function buildGamesTable(rows) {
+  if (!rows || !rows.length) return '<p>Нет данных</p>';
+
+  let html = '<table class="data-table">';
+
+  for (const row of rows) {
+    html += '<tr>';
+
+    for (const key of Object.keys(row)) {
+      const val = row[key];
+      const tdClass = `data-td ${key}`; // имя колонки как класс
+
+      if (key === 'slug' && val) {
+        const imgPath = path.join(__dirname, '..', 'public', 'img', 'games', `${val}.png`);
+
+        // Проверяем файл асинхронно
+        let imgSrc;
+        try {
+          await fs.access(imgPath);
+          imgSrc = `/img/games/${val}.png`;
+        } catch {
+          imgSrc = '/img/default.png';
+        }
+
+        html += `<td class="${tdClass} noPadd">
+          <a href="/game/${row.slug}" class="ajax-link">
+            <img src="${imgSrc}" alt="">
+          </a>
+        </td>`;
+      } else if (key === 'price' && val) {
+        html += `<td class="${tdClass}">
+          <a href="/game/${row.slug}" class="ajax-link">
+            ${val}<span class="g">₴</span>
+          </a>
+        </td>`;
+      } else {
+        html += `<td class="${tdClass}">
+          <a href="/game/${row.slug}" class="ajax-link">${val}</a>
+        </td>`;
+      }
+    }
+
+    html += '</tr>';
+  }
+
+  html += '</table>';
+  return html;
+}
+
+
+// Функция для безопасного текста
+function escapeHtml(str = "") {
+  return String(str).replace(/[&<>"']/g, s => (
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[s]
+  ));
+}
+</code></pre>
+
+Файл cashePage.js (кэширование с Redis)
+<pre><code class="language-javascript">
+const redisClient = require('./redisClient');
+
+/**
+ * Универсальный кэш для страниц / статей
+ * @param {string} key - уникальный ключ для Redis, например "page:en:home"
+ * @param {function} callback - асинхронная функция, возвращающая объект данных
+ * @param {number} ttl - время жизни кэша в секундах (по умолчанию 60)
+ */
+async function cachePage(key, callback, ttl = 60) {
+  try {
+    // Пробуем достать из Redis
+    const cached = await redisClient.get(key);
+
+    if (cached) {
+      console.log(`Отдаём из Redis: ${key}`);
+      return JSON.parse(cached);
+    }
+
+    // Генерим новые данные
+    const data = await callback();
+
+    // Кладём в Redis (с TTL)
+    await redisClient.setEx(key, ttl, JSON.stringify(data));
+
+    console.log(`Сохранили в Redis: ${key} (ttl=${ttl}s)`);
+    return data;
+
+  } catch (err) {
+    console.error('Ошибка cachePage:', err);
+    // если Redis недоступен — работаем напрямую
+    return callback();
+  }
+}
+
+module.exports = cachePage;
+</code></pre>
+
+Файл redisClient.js
+<pre><code class="language-javascript">
+const redis = require('redis');
+//require('dotenv').config(); // загружает .env // если нужно с апролем
+
+// Singleton Redis клиент
+/*
+Singleton — один клиент на весь проект, повторное require не создаёт новое подключение.
+Локальное подключение — Redis слушает только 127.0.0.1.
+Авто-переподключение — при обрыве соединения Node.js пытается переподключиться.
+Безопасность памяти — maxmemory 256 МБ + политика allkeys-lru → старые ключи удаляются, чтобы не забивалась память.
+Логирование — видно любые ошибки Redis.
+Опционально пароль — можно включить requirepass для продакшена. Redis должен быть настроен с этим паролем (requirepass твой_секретный_пароль в redis.conf для продакшена).
+*/
+let client;
+
+function getRedisClient() {
+  if (!client) {
+    client = redis.createClient({
+      url: 'redis://127.0.0.1:6379', // слушаем только локально,
+      //password: process.env.REDIS_PASSWORD, // пароль из .env
+      socket: {
+        reconnectStrategy: retries => Math.min(retries * 50, 500) // авто-переподключение
+      }
+    });
+
+    // Логирование ошибок
+    client.on('error', (err) => {
+      console.error('Redis error:', err);
+    });
+
+    // Подключаемся
+    client.connect()
+      .then(() => console.log('Redis подключен'))
+      .catch(err => console.error('Ошибка подключения к Redis:', err));
+
+    // Настройка безопасного кэширования (макс память + LRU)
+    client.configSet('maxmemory', '256mb')
+      .then(() => client.configSet('maxmemory-policy', 'allkeys-lru'))
+      .then(() => console.log('Redis безопасно настроен для кэша'))
+      .catch(err => console.error('Ошибка настройки maxmemory:', err));
+  }
+  return client;
+}
+
+// Экспортируем клиент
+module.exports = getRedisClient();
+</code></pre>
+
+И напоследок:
+<h2>LRU-кэш в Node.js</h2>
+<strong>Что такое LRU-кэш:</strong>
+<ul>
+  <li><strong>LRU</strong> = <em>Least Recently Used</em> — «наименее недавно используемый».</li>
+  <li>Хранит данные в памяти приложения.</li>
+  <li>Когда память переполняется, удаляет самые старые/редко используемые элементы.</li>
+  <li>Отлично подходит для кэша часто запрашиваемых объектов без перегрузки базы или Redis.</li>
+</ul>
+
+<h3>Установка</h3>
+<pre><code class="language-javascript">
+npm install lru-cache
+</code></pre>
+
+<h3>Пример использования</h3>
+<pre><code class="language-javascript">
+const LRU = require('lru-cache');
+
+// Настраиваем кэш
+const cache = new LRU({
+  max: 100,             // максимум 100 элементов
+  ttl: 1000 * 60 * 5,   // время жизни каждого элемента 5 минут (ms)
+});
+
+// Функция для получения данных с кэшем
+async function getGame(id) {
+  // Сначала пробуем достать из кэша
+  if (cache.has(id)) {
+    console.log('Данные взяты из LRU-кэша');
+    return cache.get(id);
+  }
+
+  // Если нет в кэше — берём из базы (симуляция)
+  const game = await fakeDbQuery(id); // допустим, обращение к базе
+  console.log('Данные взяты из базы');
+
+  // Сохраняем результат в кэш
+  cache.set(id, game);
+
+  return game;
+}
+
+// Симуляция функции запроса к базе
+async function fakeDbQuery(id) {
+  return { id, title: `Game ${id}`, stock: 10 };
+}
+
+// Пример вызова
+(async () => {
+  console.log(await getGame(1)); // берём из базы
+  console.log(await getGame(1)); // берём из кэша
+})();
+</code></pre>
+
+<h3>Вывод в консоли:</h3>
+<pre><code class="language-javascript">
+Данные взяты из базы
+{ id: 1, title: 'Game 1', stock: 10 }
+Данные взяты из LRU-кэша
+{ id: 1, title: 'Game 1', stock: 10 }
+</code></pre>
+
+<h3>Важно:</h3>
+<ul>
+  <li>LRU хранится в памяти Node.js, поэтому кэш сбросится при перезапуске сервера.</li>
+  <li>Хорошо работает для часто запрашиваемых небольших объектов, чтобы разгрузить базу.</li>
+  <li>Если нужен кэш между серверами — используйте Redis.</li>
+</ul>
+<img src="/img/console.png" style="width: 100%;" alt="">

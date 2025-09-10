@@ -1,0 +1,23 @@
+
+
+#closeLightBox {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.9);
+  z-index: 9999;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  transition: all 1s;
+}
+
+#closeLightBox img {
+  position: absolute;
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  transition: all 1s;
+}

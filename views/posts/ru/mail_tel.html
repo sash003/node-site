@@ -1,0 +1,80 @@
+
+Node.js часто используют не только для веб-приложений, но и для фоновых задач: например, уведомлений пользователям. Самые популярные варианты — это отправка писем на e-mail и сообщений в Telegram. Давай разберём оба способа на практике.
+<h2>Отправка писем через Nodemailer</h2>
+Для e-mail в Node.js чаще всего применяют пакет <b>nodemailer</b>.
+Он работает через SMTP-сервер (например, Gmail, Mailgun, SendGrid и др.).
+<pre><code class="language-bash">
+npm install nodemailer
+</code></pre>
+Пример простого скрипта:
+<pre><code class="language-javascript">
+// mail.js
+const nodemailer = require('nodemailer');
+
+// создаём транспорт (SMTP-подключение)
+let transporter = nodemailer.createTransport({
+  service: 'gmail', // или smtp.yandex.ru, smtp.mail.ru
+  auth: {
+    user: 'yourmail@gmail.com',
+    pass: 'app-password' // берём пароль приложения
+  }
+});
+
+// отправка письма
+async function sendMail() {
+  let info = await transporter.sendMail({
+    from: '"My App" <yourmail@gmail.com>',
+    to: 'user@example.com',
+    subject: 'Привет!',
+    text: 'Это тестовое письмо из Node.js',
+    html: '<b>Это тестовое письмо из Node.js</b>'
+  });
+
+  console.log('Письмо отправлено: %s', info.messageId);
+}
+
+sendMail().catch(console.error);
+</code></pre>
+⚡ Важно: если используешь Gmail, включи <i>пароль приложений</i> и двухфакторную аутентификацию, иначе письмо не пройдёт.
+<h2>Отправка уведомлений в Telegram</h2>
+Для уведомлений в Telegram нужно создать <b>бота</b> в <a href="https://t.me/BotFather" target="_blank">BotFather</a>.
+Он выдаст токен. Потом получаем свой <code>chat_id</code>, написав боту любое сообщение и проверив https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates
+<pre><code class="language-bash">
+npm install node-fetch
+</code></pre>
+Пример кода:
+<pre><code class="language-javascript">
+// telegram.js
+const fetch = require('node-fetch');
+
+const TOKEN = 'YOUR_BOT_TOKEN';
+const CHAT_ID = '123456789';
+
+async function sendTelegram(text) {
+  const url = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+  const params = {
+    chat_id: CHAT_ID,
+    text: text,
+    parse_mode: 'HTML'
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+
+  const data = await res.json();
+  console.log('Ответ Telegram:', data);
+}
+
+sendTelegram('Node.js сообщает: сервер запущен!');
+</code></pre>
+<h2>Комбинируем оба способа</h2>
+Ты можешь вынести функции <code>sendMail()</code> и <code>sendTelegram()</code> в отдельный модуль, и дергать их в любой момент: при регистрации пользователя, при ошибках на сервере или при поступлении нового заказа.
+<h2>Вывод</h2>
+<ul><li><b>Nodemailer</b> — стандарт для отправки писем через SMTP.</li>
+  <li><b>Telegram Bot API</b> — быстрый способ слать уведомления прямо в Telegram.</li>
+  <li>Оба метода легко встроить в любой проект на Node.js.</li></ul>
+Так твои пользователи и админы всегда будут в курсе событий 🚀
+
